@@ -7,7 +7,7 @@ FTS5/BM25 稀疏检索与加权融合。
 
 ![RAG Web 应用界面](docs/app-screenshot-v3.png)
 
-*界面采用「侧边栏知识库 + 文档管理 / 语义检索双视图」布局，Flat 设计风格。*
+*界面采用「侧边栏知识库 + 文档管理 / 语义检索 / 知识库对话」多视图布局，Flat 设计风格；截图展示文档管理视图。*
 
 ## 目录结构
 
@@ -19,6 +19,7 @@ rag_core/
   chunking/                  递归字符分块 + Markdown 标题分块
   retrieval/                 稀疏检索、分数融合、检索总控
   embeddings.py              EmbeddingProvider 契约 + local-hash / OpenAI 兼容两种实现
+  llm.py                     OpenAI 兼容 LLM provider 注册、配置与对话
   service.py                 知识库与文档生命周期的轻量业务层
 web/
   app.py                     FastAPI 接口
@@ -27,7 +28,7 @@ web/
   static/css/app.css         布局与组件样式
   static/js/api.js           后端接口封装
   static/js/app.js           状态管理与交互
-data/                        运行时生成：kb.db、<kb_id>/{doc.db,index.faiss,files/}
+data/                        运行时生成：kb.db、<kb_id>/{doc.db,index.faiss,files/}、embedding_providers.json、llm_providers.json
 ```
 
 ## 启动
@@ -45,7 +46,24 @@ python -m venv .venv
 
 1. 填名称 → 选 `local-hash` → 创建知识库。
 2. 上传 `txt / md / pdf / csv / json`（前端支持拖拽，多个文件依次入库）。
-3. 右侧输入问题 → 检索；下方同时展示召回块和拼好的 Prompt 上下文。
+3. 在「语义检索」输入问题，查看召回块和拼好的 Prompt 上下文。
+4. 在「知识库对话」直接提问，模型会基于检索到的知识库片段回答，并标注来源。
+
+## 知识库对话与 LLM 配置
+
+点击右上角「LLM 配置」→ 选服务商预设 → 填 API Key → 「保存并测试」；测试通过后关闭弹窗，
+在对话视图中确认顶部显示的启用模型即可提问。配置保存在 `data/llm_providers.json`，重启后自动加载。
+
+内置预设均为 OpenAI 兼容 `/v1/chat/completions` 协议：OpenAI、阿里百炼、硅基流动、智谱、DeepSeek、
+本地 Ollama 与自定义服务。可同时在配置面板里保存多个模型并切换启用，调整温度、最大 tokens 与系统提示词。
+
+对话流程：
+- 每次提问先用当前问题在所选知识库中做混合检索，取回 Top-M 分块作为上下文；
+- system prompt 要求只依据这些片段回答，并用 `[编号]` 标注来源；资料不足时明确说明无法回答；
+- 保留最近 10 轮历史消息做多轮对话；切换知识库会清空当前对话，避免串库；
+- 每条回答下方展示引用的知识库 / 文档 / 分块 / 相关度，便于核对。
+
+> 当前版本用用户最后一轮问题做检索，不会根据指代关系自动改写查询；追问时建议带上明确关键词。
 
 ## 使用云端 Embedding 模型
 
@@ -101,6 +119,13 @@ python scripts/mock_embedding_server.py --port 8100
 | GET/POST | `/api/kbs/{kb_id}/documents` | 列出 / 上传文档 |
 | DELETE | `/api/kbs/{kb_id}/documents/{doc_id}` | 删除文档 |
 | POST | `/api/retrieve` | `{"query": "...", "kb_names": []}` 混合检索 |
+| GET | `/api/llm/config` | LLM 配置（provider 列表、启用项、预设、生成参数） |
+| POST | `/api/llm/providers` | 新增或更新 LLM provider |
+| DELETE | `/api/llm/providers/{id}` | 删除 LLM provider |
+| POST | `/api/llm/providers/{id}/activate` | 切换启用的 LLM provider |
+| POST | `/api/llm/providers/{id}/test` | 测试 LLM 连通性与模型回复 |
+| POST | `/api/llm/settings` | 更新温度、最大 tokens、系统提示词 |
+| POST | `/api/llm/chat` | `{"messages": [...], "kb_names": []}` 基于知识库的对话 |
 
 ## 许可证
 

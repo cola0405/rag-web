@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 from rag_core import KBService  # noqa: E402
 from rag_core.embeddings import PROVIDER_PRESETS, ProviderRegistry  # noqa: E402
 from rag_core.exceptions import KnowledgeBaseUploadError  # noqa: E402
+from rag_core.llm import LLMRegistry  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +35,7 @@ logger = logging.getLogger("rag-web")
 DATA_DIR = Path(os.getenv("RAG_DATA_DIR", str(ROOT / "data"))).resolve()
 registry = ProviderRegistry(DATA_DIR / "embedding_providers.json")
 service = KBService(DATA_DIR, registry.providers)
+llm_registry = LLMRegistry(DATA_DIR / "llm_providers.json")
 
 
 @asynccontextmanager
@@ -77,6 +79,31 @@ class ProviderRequest(BaseModel):
 class RetrieveRequest(BaseModel):
     query: str
     kb_names: list[str] = Field(default_factory=list)
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    kb_names: list[str] = Field(default_factory=list)
+
+
+class LLMProviderRequest(BaseModel):
+    id: str
+    name: str | None = None
+    base_url: str
+    model: str
+    api_key: str = ""
+    clear_api_key: bool = False
+
+
+class LLMSettingsRequest(BaseModel):
+    temperature: float = 0.2
+    max_tokens: int = 1024
+    system_prompt: str | None = None
 
 
 @app.get("/")
@@ -205,5 +232,107 @@ async def delete_document(kb_id: str, doc_id: str):
 async def retrieve(payload: RetrieveRequest):
     try:
         return await service.retrieve(payload.query, payload.kb_names)
+    except Exception as exc:
+        _handle(exc)
+
+
+# ---------- LLM 配置与知识库对话 ----------
+
+@app.get("/api/llm/config")
+async def get_llm_config():
+    return llm_registry.get_config()
+
+
+@app.post("/api/llm/providers")
+async def add_llm_provider(payload: LLMProviderRequest):
+    try:
+        return llm_registry.add(payload.model_dump())
+    except Exception as exc:
+        _handle(exc)
+
+
+@app.delete("/api/llm/providers/{provider_id}")
+async def remove_llm_provider(provider_id: str):
+    try:
+        llm_registry.remove(provider_id)
+    except Exception as exc:
+        _handle(exc)
+    return {"ok": True}
+
+
+@app.post("/api/llm/providers/{provider_id}/activate")
+async def activate_llm_provider(provider_id: str):
+    try:
+        return llm_registry.activate(provider_id)
+    except Exception as exc:
+        _handle(exc)
+
+
+@app.post("/api/llm/providers/{provider_id}/test")
+async def test_llm_provider(provider_id: str):
+    try:
+        return await llm_registry.test(provider_id)
+    except Exception as exc:
+        _handle(exc)
+
+
+@app.post("/api/llm/settings")
+async def update_llm_settings(payload: LLMSettingsRequest):
+    data = {"temperature": payload.temperature, "max_tokens": payload.max_tokens}
+    if payload.system_prompt is not None:
+        data["system_prompt"] = payload.system_prompt
+    try:
+        return llm_registry.update_settings(data)
+    except Exception as exc:
+        _handle(exc)
+
+
+def _chat_system_prompt(base_prompt: str, context: str, has_context: bool) -> str:
+    if has_context:
+        return (
+            f"{base_prompt}\n\n知识库片段：\n{context}\n\n"
+            "只使用上述片段中的信息回答；用到某条资料时用 [编号] 标注。"
+        )
+    return (
+        f"{base_prompt}\n\n当前知识库未检索到相关内容。"
+        "请直接说明无法基于当前知识库回答该问题，不要编造。"
+    )
+
+
+@app.post("/api/llm/chat")
+async def llm_chat(payload: ChatRequest):
+    try:
+        messages = [{"role": m.role, "content": m.content} for m in payload.messages]
+        if not messages:
+            raise ValueError("对话消息不能为空")
+        if any(m["role"] not in ("user", "assistant") for m in messages):
+            raise ValueError("仅支持 user / assistant 角色")
+        if messages[-1]["role"] != "user":
+            raise ValueError("最后一条消息必须是用户问题")
+        question = messages[-1]["content"].strip()
+        if not question:
+            raise ValueError("请输入问题")
+        if not llm_registry.active_id:
+            raise ValueError("尚未启用 LLM 模型，请先在「LLM 配置」中添加并启用")
+
+        chat_context = await service.prepare_chat_context(question, payload.kb_names)
+        system_prompt = _chat_system_prompt(
+            str(llm_registry.settings["system_prompt"]),
+            chat_context["context"],
+            chat_context["has_context"],
+        )
+        history = messages[:-1][-10:]
+        llm_messages = [
+            {"role": "system", "content": system_prompt},
+            *history,
+            {"role": "user", "content": question},
+        ]
+        answer, usage = await llm_registry.chat(llm_messages)
+        return {
+            "answer": answer,
+            "sources": chat_context["sources"],
+            "usage": usage,
+            "provider_id": llm_registry.active_id,
+        }
     except Exception as exc:
         _handle(exc)

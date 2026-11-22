@@ -49,5 +49,13 @@
     deleteDocument: (kbId, docId) =>
       request(`/api/kbs/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`, { method: "DELETE" }),
     retrieve: (query, kbNames) => request("/api/retrieve", jsonBody({ query, kb_names: kbNames })),
+
+    llmConfig: () => request("/api/llm/config"),
+    addLlmProvider: (payload) => request("/api/llm/providers", jsonBody(payload)),
+    removeLlmProvider: (id) => request(`/api/llm/providers/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    activateLlmProvider: (id) => request(`/api/llm/providers/${encodeURIComponent(id)}/activate`, { method: "POST" }),
+    testLlmProvider: (id) => request(`/api/llm/providers/${encodeURIComponent(id)}/test`, { method: "POST" }),
+    updateLlmSettings: (payload) => request("/api/llm/settings", jsonBody(payload)),
+    chat: (messages, kbNames) => request("/api/llm/chat", jsonBody({ messages, kb_names: kbNames })),
   };
 })(window);

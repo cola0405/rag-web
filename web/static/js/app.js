@@ -15,6 +15,10 @@
     results: null,
     kbListError: null,
     activeTab: "docs",
+    llm: null,
+    chatScope: new Set(),
+    chatMessages: [],
+    chatBusy: false,
   };
 
   function readSelection() {
@@ -220,6 +224,7 @@
 
   /* ---------- 知识库 ---------- */
   async function loadKbs() {
+    const previousKbId = state.currentKbId;
     try {
       state.kbs = await api.kbs();
       state.kbListError = null;
@@ -236,6 +241,7 @@
     renderKbList();
     renderPageHead();
     resetScope();
+    resetChatScope(previousKbId !== state.currentKbId);
     await loadDocs();
   }
   function selectKb(id) {
@@ -245,6 +251,7 @@
     renderKbList();
     renderPageHead();
     resetScope();
+    resetChatScope(true);
     loadDocs();
     closeSidebar();
   }
@@ -285,6 +292,7 @@
     zone.classList.toggle("is-disabled", !kb);
     zone.setAttribute("aria-disabled", String(!kb));
     $("dropHint").textContent = kb ? `将文件入库到「${kb.kb_name}」` : "先选择知识库，再上传文档";
+    renderLlmStatus();
   }
 
   /* ---------- 文档 ---------- */
@@ -462,6 +470,230 @@
     }
   }
 
+  /* ---------- LLM 配置 ---------- */
+  async function loadLlmConfig() {
+    state.llm = await api.llmConfig();
+    renderLlmProviderList();
+    renderLlmSettings();
+    renderLlmStatus();
+  }
+  function renderLlmStatus() {
+    const active = state.llm && state.llm.providers.find((p) => p.is_active);
+    $("chatProviderHint").textContent = active ? `LLM：${active.name} · ${active.model}` : "未配置 LLM";
+    const canChat = Boolean(active && state.currentKbId && state.chatScope.size);
+    $("chatSendBtn").disabled = !canChat || state.chatBusy;
+    $("chatInput").disabled = !canChat || state.chatBusy;
+    $("chatInput").placeholder = active ? "基于所选知识库提问…" : "请先在 LLM 配置中启用模型";
+  }
+  function renderLlmProviderList() {
+    const el = $("llmProviderList");
+    const providers = (state.llm && state.llm.providers) || [];
+    $("llmProviderCount").textContent = providers.length;
+    if (!providers.length) {
+      el.innerHTML = '<div class="empty-inline">还没有配置 LLM，选一个预设开始</div>';
+      return;
+    }
+    el.innerHTML = providers.map((p) => `
+      <div class="provider-row">
+        <span class="provider-name">${esc(p.name || p.id)} <span class="muted mono">${esc(p.id)}</span>${p.is_active ? '<span class="active-badge">启用中</span>' : ""}</span>
+        <span class="provider-meta">${esc(p.model || "—")}${p.has_key ? " · 已配置 Key" : ""}</span>
+        <span class="llm-actions">
+          ${p.is_active ? "" : `<button class="text-btn" data-llm-activate="${esc(p.id)}">启用</button>`}
+          <button class="text-btn" data-llm-edit="${esc(p.id)}">编辑</button>
+          <button class="icon-btn" data-llm-remove="${esc(p.id)}" title="删除模型" aria-label="删除 ${esc(p.id)}">${ico("trash")}</button>
+        </span>
+      </div>`).join("");
+    el.querySelectorAll("button[data-llm-activate]").forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await api.activateLlmProvider(btn.dataset.llmActivate);
+          await loadLlmConfig();
+          toast("已切换对话模型", "success");
+        } catch (err) { toast(err.message, "error"); }
+      };
+    });
+    el.querySelectorAll("button[data-llm-edit]").forEach((btn) => {
+      btn.onclick = () => {
+        const p = providers.find((item) => item.id === btn.dataset.llmEdit);
+        if (!p) return;
+        $("llmId").value = p.id;
+        $("llmName").value = p.name || "";
+        $("llmBaseUrl").value = p.base_url || "";
+        $("llmModel").value = p.model || "";
+        $("llmKey").value = "";
+        $("llmClearKey").checked = false;
+        $("llmPresetNote").textContent = "编辑已有模型：API Key 留空表示保留原值。";
+        setLlmTestResult("修改后可保存或测试连接", "");
+      };
+    });
+    el.querySelectorAll("button[data-llm-remove]").forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.llmRemove;
+        const ok = await confirmDialog({ title: "删除 LLM 模型？", message: `删除「${id}」后无法恢复；若它是当前启用模型，将自动切换或清空启用状态。`, okText: "删除" });
+        if (!ok) return;
+        try {
+          await api.removeLlmProvider(id);
+          await loadLlmConfig();
+          toast("已删除 LLM 模型", "success");
+        } catch (err) { toast(err.message, "error"); }
+      };
+    });
+  }
+  function renderLlmSettings() {
+    const s = (state.llm && state.llm.settings) || {};
+    $("llmTemperature").value = s.temperature == null ? 0.2 : s.temperature;
+    $("llmMaxTokens").value = s.max_tokens == null ? 1024 : s.max_tokens;
+    $("llmSystemPrompt").value = s.system_prompt || "";
+  }
+  function openLlmModal() {
+    closeSidebar();
+    openModal("llmModal", "llmPresetSelect");
+    loadLlmConfig()
+      .then(() => {
+        const presets = (state.llm && state.llm.presets) || [];
+        $("llmPresetSelect").innerHTML = presets.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join("");
+        if (presets.length) applyLlmPreset(0);
+      })
+      .catch((err) => toast(err.message, "error"));
+  }
+  function applyLlmPreset(index) {
+    const p = state.llm && state.llm.presets && state.llm.presets[index];
+    if (!p) return;
+    $("llmId").value = p.id || "";
+    $("llmName").value = p.name || "";
+    $("llmBaseUrl").value = p.base_url || "";
+    $("llmModel").value = p.model || "";
+    $("llmKey").value = "";
+    $("llmClearKey").checked = false;
+    $("llmPresetNote").textContent = p.note || "";
+    setLlmTestResult("填写配置后可测试连接", "");
+  }
+  function llmPayload() {
+    return {
+      id: $("llmId").value.trim(),
+      name: $("llmName").value.trim(),
+      base_url: $("llmBaseUrl").value.trim(),
+      model: $("llmModel").value.trim(),
+      api_key: $("llmKey").value.trim(),
+      clear_api_key: $("llmClearKey").checked,
+    };
+  }
+  function validateLlmConfig(p) {
+    if (!p.id) return "请填写 Provider ID";
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(p.id)) return "ID 只能用字母、数字、下划线和连字符";
+    if (!p.base_url.startsWith("http://") && !p.base_url.startsWith("https://")) return "Base URL 需以 http:// 或 https:// 开头";
+    if (!p.model) return "请填写模型名称";
+    return null;
+  }
+  function setLlmTestResult(text, kind) {
+    const el = $("llmTestResult");
+    el.textContent = text;
+    el.className = `test-result${kind ? ` is-${kind}` : ""}`;
+  }
+  async function saveLlmProvider(p) {
+    const saved = await api.addLlmProvider(p);
+    await loadLlmConfig();
+    return saved;
+  }
+
+  /* ---------- 知识库对话 ---------- */
+  function resetChatScope(clearHistory) {
+    state.chatScope.clear();
+    if (state.currentKbId) state.chatScope.add(state.currentKbId);
+    renderChatScope();
+    if (clearHistory) {
+      state.chatMessages = [];
+      renderChat();
+    }
+    renderLlmStatus();
+  }
+  function renderChatScope() {
+    const el = $("chatScopeChips");
+    if (!state.kbs.length) {
+      el.innerHTML = '<span class="muted">暂无知识库</span>';
+      return;
+    }
+    el.innerHTML = state.kbs.map((kb) => `
+      <label class="chip">
+        <input type="checkbox" value="${esc(kb.kb_id)}" ${state.chatScope.has(kb.kb_id) ? "checked" : ""} />
+        <span class="chip-mark">${ico("check")}</span>${esc(kb.kb_name)}
+      </label>`).join("");
+    el.querySelectorAll("input").forEach((input) => {
+      input.onchange = () => {
+        if (input.checked) state.chatScope.add(input.value);
+        else state.chatScope.delete(input.value);
+        renderLlmStatus();
+      };
+    });
+  }
+  function renderChat() {
+    const el = $("chatMessages");
+    $("clearChatBtn").hidden = state.chatMessages.length === 0;
+    if (!state.chatMessages.length) {
+      el.innerHTML = `
+        <div class="chat-welcome">
+          <span class="chat-welcome-icon">${ico("sparkle")}</span>
+          <strong>基于知识库内容回答</strong>
+          <p>回答只会引用所选知识库中的资料，并标注来源；资料不足时会明确告知。</p>
+        </div>`;
+      return;
+    }
+    el.innerHTML = state.chatMessages.map((m) => `
+      <div class="chat-msg ${esc(m.role)}${m.error ? " error" : ""}">
+        <span class="chat-avatar">${ico(m.role === "user" ? "user" : m.error ? "alert" : "bot")}</span>
+        <div class="chat-bubble-main">
+          <div class="chat-bubble"></div>
+          ${m.sources && m.sources.length ? `<div class="chat-sources">${m.sources.map((s) => `<span class="source-chip">[${Number(s.index) || 0}] ${esc(s.kb_name)} / ${esc(s.doc_name)} · ${formatScore(s.score)}</span>`).join("")}</div>` : ""}
+          ${m.provider ? `<div class="chat-meta">模型：${esc(m.provider)}${m.usage && m.usage.total_tokens ? ` · ${m.usage.total_tokens} tokens` : ""}</div>` : ""}
+        </div>
+      </div>`).join("");
+    el.querySelectorAll(".chat-bubble").forEach((node, i) => {
+      node.textContent = state.chatMessages[i].content || "";
+    });
+    el.scrollTop = el.scrollHeight;
+  }
+  async function sendChat() {
+    if (state.chatBusy) return;
+    const text = $("chatInput").value.trim();
+    if (!text) { toast("请输入问题", "error"); $("chatInput").focus(); return; }
+    if (!state.chatScope.size) { toast("请至少选择一个知识库", "error"); return; }
+    if (!state.llm || !state.llm.active_id) { toast("请先配置并启用 LLM 模型", "error"); openLlmModal(); return; }
+
+    const kbNames = state.kbs.filter((kb) => state.chatScope.has(kb.kb_id)).map((kb) => kb.kb_name);
+    state.chatMessages.push({ role: "user", content: text });
+    $("chatInput").value = "";
+    state.chatMessages.push({ role: "assistant", content: "正在检索知识库并生成回答…", pending: true });
+    renderChat();
+
+    state.chatBusy = true;
+    renderLlmStatus();
+    setLoading($("chatSendBtn"), true, "回答中…");
+    try {
+      const history = state.chatMessages
+        .filter((m) => !m.pending && !m.error)
+        .map((m) => ({ role: m.role, content: m.content }));
+      const data = await api.chat(history, kbNames);
+      state.chatMessages.pop();
+      state.chatMessages.push({
+        role: "assistant",
+        content: data.answer || "（模型未返回内容）",
+        sources: data.sources || [],
+        usage: data.usage || {},
+        provider: data.provider_id,
+      });
+      renderChat();
+    } catch (err) {
+      state.chatMessages.pop();
+      state.chatMessages.push({ role: "assistant", content: `生成失败：${err.message}`, error: true });
+      renderChat();
+      toast(err.message, "error");
+    } finally {
+      state.chatBusy = false;
+      setLoading($("chatSendBtn"), false);
+      renderLlmStatus();
+    }
+  }
+
   /* ---------- 视图切换与侧边栏 ---------- */
   function switchTab(tab) {
     state.activeTab = tab;
@@ -472,6 +704,12 @@
     });
     $("view-docs").hidden = tab !== "docs";
     $("view-search").hidden = tab !== "search";
+    $("view-chat").hidden = tab !== "chat";
+    if (tab === "chat") {
+      renderChatScope();
+      renderChat();
+      renderLlmStatus();
+    }
   }
   function openSidebar() { $("sidebar").classList.add("is-open"); $("sidebarScrim").classList.add("is-open"); }
   function closeSidebar() { $("sidebar").classList.remove("is-open"); $("sidebarScrim").classList.remove("is-open"); }
@@ -490,6 +728,71 @@
       try {
         await Promise.all([loadPresets(), loadProviders()]);
       } catch (err) { toast(err.message, "error"); }
+    };
+    $("manageLlmBtn").onclick = openLlmModal;
+    $("configLlmBtn").onclick = openLlmModal;
+
+    $("llmPresetSelect").onchange = (e) => applyLlmPreset(Number(e.target.value));
+    $("saveLlmBtn").onclick = async () => {
+      const p = llmPayload();
+      const invalid = validateLlmConfig(p);
+      if (invalid) return setLlmTestResult(invalid, "bad");
+      try {
+        const saved = await saveLlmProvider(p);
+        setLlmTestResult(`已保存「${saved.id}」${saved.is_active ? "，当前已启用" : ""}`, "ok");
+        toast("LLM 模型已保存", "success");
+      } catch (err) { setLlmTestResult(err.message, "bad"); }
+    };
+    $("testLlmBtn").onclick = async () => {
+      const p = llmPayload();
+      const invalid = validateLlmConfig(p);
+      if (invalid) return setLlmTestResult(invalid, "bad");
+      const btn = $("testLlmBtn");
+      setLoading(btn, true, "测试中…");
+      setLlmTestResult("正在保存并测试连接…", "");
+      try {
+        const saved = await saveLlmProvider(p);
+        const result = await api.testLlmProvider(saved.id);
+        const reply = String(result.reply || "").trim();
+        if (reply) {
+          setLlmTestResult(`连接成功，模型回复：${reply.slice(0, 80)}`, "ok");
+          toast("LLM 连接测试通过", "success");
+        } else {
+          setLlmTestResult("连接成功，但模型没有返回文本", "bad");
+          toast("模型返回为空", "error");
+        }
+      } catch (err) {
+        setLlmTestResult(`测试失败：${err.message}`, "bad");
+        toast(err.message, "error");
+      } finally { setLoading(btn, false); }
+    };
+    $("resetLlmSystemBtn").onclick = () => {
+      $("llmSystemPrompt").value = "你是知识库问答助手。只依据提供的知识库片段回答问题；如果片段不足以回答，明确说明当前知识库没有相关信息，不要编造。回答简洁、条理清晰，并在使用到某条资料时用 [编号] 标注来源。";
+    };
+    $("saveLlmSettingsBtn").onclick = async () => {
+      const temperature = Number($("llmTemperature").value);
+      const maxTokens = Number($("llmMaxTokens").value);
+      if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) return toast("温度需在 0 ~ 2 之间", "error");
+      if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192) return toast("最大 tokens 需在 1 ~ 8192 之间", "error");
+      try {
+        await api.updateLlmSettings({
+          temperature,
+          max_tokens: maxTokens,
+          system_prompt: $("llmSystemPrompt").value,
+        });
+        await loadLlmConfig();
+        toast("生成参数已保存", "success");
+      } catch (err) { toast(err.message, "error"); }
+    };
+
+    $("chatSendBtn").onclick = sendChat;
+    $("chatInput").onkeydown = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+    };
+    $("clearChatBtn").onclick = () => {
+      state.chatMessages = [];
+      renderChat();
+      toast("对话已清空", "success");
     };
     document.querySelectorAll("[data-close]").forEach((btn) => {
       btn.onclick = () => closeModal(btn.dataset.close);
@@ -661,6 +964,9 @@
       await loadProviders();
       await loadKbs();
     } catch (err) { toast(err.message, "error"); }
+    try {
+      await loadLlmConfig();
+    } catch (err) { toast(`LLM 配置加载失败：${err.message}`, "error"); }
   }
   init();
 })();
