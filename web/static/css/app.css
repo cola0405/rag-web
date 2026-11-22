@@ -163,11 +163,15 @@ kbd {
   display: flex; flex-direction: column;
 }
 
-.tabs { display: flex; gap: var(--sp-5); border-bottom: 1px solid var(--border); margin-bottom: var(--sp-3); }
+.tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  margin: 0 0 var(--sp-3) calc(-1 * var(--sp-3));
+}
 .tab {
-  display: inline-flex; align-items: center; gap: var(--sp-2);
-  padding: 0 2px var(--sp-3); border: 0; border-bottom: 2px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 var(--sp-3) var(--sp-3); border: 0; border-bottom: 2px solid transparent;
   background: transparent; color: var(--muted); font-weight: 600; cursor: pointer;
+  white-space: nowrap;
 }
 .tab:hover { color: var(--text); }
 .tab.is-active { color: var(--primary); border-bottom-color: var(--primary); }
@@ -375,7 +379,7 @@ kbd {
 .icon-btn.danger-icon:hover { color: var(--danger); background: var(--danger-weak); }
 .chat-layout {
   flex: 1; min-height: 0; display: grid;
-  grid-template-columns: 208px minmax(0, 1fr); gap: var(--sp-4); align-items: stretch;
+  grid-template-columns: 264px minmax(0, 1fr); gap: var(--sp-4); align-items: stretch;
 }
 .session-rail {
   display: flex; flex-direction: column; height: 100%; min-height: 0;
@@ -389,20 +393,33 @@ kbd {
 .session-rail-head .icon-btn { margin-left: auto; width: 26px; height: 26px; }
 .session-list { flex: 1; overflow-y: auto; padding: var(--sp-1); }
 .session-item {
-  position: relative; display: flex; flex-direction: column; gap: 3px;
-  padding: var(--sp-2); margin-bottom: 2px;
+  position: relative; display: flex; flex-direction: column; gap: 4px;
+  padding: 10px var(--sp-3); margin-bottom: 2px;
   border: 1px solid transparent; border-radius: var(--radius-sm);
 }
-.session-item:hover { background: var(--canvas); }
+.session-item:hover, .session-item:focus-within { background: var(--canvas); }
 .session-item.is-active { background: var(--primary-weak); border-color: #FBD3C3; }
-.session-open { border: 0; background: none; padding: 0 48px 0 0; text-align: left; cursor: pointer; min-width: 0; }
+.session-open {
+  width: 100%; border: 0; background: none; padding: 0;
+  text-align: left; cursor: pointer; min-width: 0;
+}
+.session-item:hover .session-open,
+.session-item:focus-within .session-open { padding-right: 48px; }
 .session-title {
   display: block; font-weight: 600; font-size: var(--fs-14);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .session-item.is-active .session-title { color: var(--primary-strong); }
-.session-meta { display: block; font-size: 11px; color: var(--muted); }
-.session-actions { position: absolute; top: 7px; right: 4px; display: flex; gap: 0; }
+.session-meta {
+  display: block; font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.session-actions {
+  position: absolute; top: 8px; right: 6px; display: flex; gap: 0;
+  opacity: 0; pointer-events: none; transition: opacity .12s;
+}
+.session-item:hover .session-actions,
+.session-item:focus-within .session-actions { opacity: 1; pointer-events: auto; }
 .session-actions .icon-btn { width: 22px; height: 22px; }
 .chat-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .chat-scope { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
@@ -485,7 +502,7 @@ kbd {
 /* ========== 响应式 ========== */
 @media (max-width: 1080px) {
   .workspace { padding: var(--sp-6) var(--sp-4); }
-  .chat-layout { grid-template-columns: 184px minmax(0, 1fr); }
+  .chat-layout { grid-template-columns: 232px minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
   .only-mobile { display: inline-flex; }
@@ -523,4 +540,8 @@ kbd {
   .composer { flex-direction: column; align-items: stretch; }
   .composer .btn { min-height: 36px; width: 100%; }
   .llm-actions { flex-wrap: wrap; justify-content: flex-end; }
+}
+@media (hover: none) {
+  .session-actions { opacity: 1; pointer-events: auto; }
+  .session-open { padding-right: 48px; }
 }
