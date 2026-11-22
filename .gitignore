@@ -1,0 +1,27 @@
+# 运行时数据（含 API Key 配置、SQLite 库、FAISS 索引、上传文件）
+data/
+*.db
+*.db-wal
+*.db-shm
+*.faiss
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 工具缓存
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 本地密钥与编辑器
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
+*.log
