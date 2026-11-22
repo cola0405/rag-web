@@ -5,9 +5,9 @@ FTS5/BM25 稀疏检索与加权融合。
 **零 API key 即可跑通**：默认 `local-hash` embedding 是纯本地确定性向量；
 也可以换成云端语义模型（见下文）。
 
-![RAG Web 应用界面（旧版三栏布局）](docs/app-screenshot-v2.png)
+![RAG Web 应用界面](docs/app-screenshot-v3.png)
 
-*当前界面采用「侧边栏知识库 + 文档管理 / 语义检索双视图」布局，Flat 设计风格；上图为重构前的三栏版本。*
+*界面采用「侧边栏知识库 + 文档管理 / 语义检索双视图」布局，Flat 设计风格。*
 
 ## 目录结构
 
