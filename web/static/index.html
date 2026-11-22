@@ -4,9 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>RAG Web · 知识库工作台</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<meta name="theme-color" content="#C2410C" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F2673C'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 8 8 4-8 4-8-4 8-4Z'/%3E%3Cpath d='m8 16 8 4 8-4'/%3E%3Cpath d='m8 20 8 4 8-4'/%3E%3C/g%3E%3C/svg%3E" />
 <link rel="stylesheet" href="/static/css/tokens.css" />
 <link rel="stylesheet" href="/static/css/app.css" />
 </head>
@@ -35,6 +34,10 @@
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 17h6"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path d="m4 20 .9-4.2L16.2 4.5 19.5 7.8 8.2 19.1 4 20Z"/><path d="m14.5 6.2 3.3 3.3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-spinner" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9" /></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M4 4l16 16"/><path d="M9.5 5.4A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4"/><path d="M6.3 7.4A16.6 16.6 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 3.6-.7"/><path d="M9.9 10.2a2.9 2.9 0 0 0 4 4"/></symbol>
 </svg>
 
 <div class="app-shell">
@@ -51,11 +54,8 @@
       <div class="health-chip" id="healthChip" title="服务状态">
         <span class="health-dot"></span><span id="healthText">连接中</span>
       </div>
-      <button class="btn btn-ghost" id="manageLlmBtn">
-        <svg class="icon"><use href="#i-sparkle" /></svg><span>LLM 配置</span>
-      </button>
-      <button class="btn btn-ghost" id="manageProvidersBtn">
-        <svg class="icon"><use href="#i-sliders" /></svg><span>Embedding 模型</span>
+      <button class="btn btn-ghost" id="settingsBtn" aria-label="设置" title="设置：LLM 与 Embedding 模型">
+        <svg class="icon"><use href="#i-gear" /></svg><span>设置</span>
       </button>
     </div>
   </header>
@@ -102,6 +102,11 @@
             <span class="drop-icon"><svg class="icon"><use href="#i-upload" /></svg></span>
             <strong>拖拽文件到此处，或 <span class="link-text">点击选择</span></strong>
             <span class="drop-sub" id="dropHint">先选择知识库，再上传文档</span>
+            <div class="upload-status" id="uploadStatus" hidden>
+              <svg class="icon spin"><use href="#i-spinner" /></svg>
+              <span class="upload-name"></span>
+              <span class="upload-count mono"></span>
+            </div>
           </div>
           <input id="fileInput" type="file" multiple accept=".txt,.md,.markdown,.pdf,.csv,.json" hidden />
         </div>
@@ -109,9 +114,11 @@
         <div class="panel">
           <div class="panel-head">
             <h2>文档列表 <span class="panel-count" id="docCount">0</span></h2>
-            <button class="icon-btn" id="refreshDocsBtn" title="刷新文档列表" aria-label="刷新文档列表">
-              <svg class="icon"><use href="#i-refresh" /></svg>
-            </button>
+            <div class="head-right">
+              <button class="icon-btn" id="refreshDocsBtn" title="刷新文档列表" aria-label="刷新文档列表">
+                <svg class="icon"><use href="#i-refresh" /></svg>
+              </button>
+            </div>
           </div>
           <div id="docList">
             <div class="empty-state">
@@ -127,7 +134,7 @@
         <div class="panel">
           <div class="panel-head">
             <h2>检索问题</h2>
-            <span class="panel-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速检索</span>
+            <span class="panel-hint"><kbd>Enter</kbd> 检索 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
           </div>
           <label class="field-label" for="queryInput">问题 / 关键词</label>
           <textarea id="queryInput" class="input" rows="3" placeholder="例如：怎么配置知识库的分块大小？"></textarea>
@@ -147,7 +154,9 @@
         <div class="panel">
           <div class="panel-head">
             <h2>检索结果 <span class="panel-count" id="resultCount">0</span></h2>
-            <button class="text-btn" id="clearResultsBtn" hidden>清空结果</button>
+            <div class="head-right">
+              <button class="text-btn" id="clearResultsBtn" hidden>清空结果</button>
+            </div>
           </div>
           <div id="results">
             <div class="empty-state">
@@ -172,14 +181,10 @@
         <div class="panel chat-panel">
           <div class="panel-head">
             <h2>知识库对话</h2>
-            <span class="panel-hint" id="chatProviderHint">未配置 LLM</span>
-            <button class="text-btn" id="clearChatBtn" hidden>清空当前会话</button>
-            <button class="icon-btn danger-icon" id="deleteKbBtn" title="删除当前知识库" aria-label="删除当前知识库" disabled>
-              <svg class="icon"><use href="#i-trash" /></svg>
-            </button>
-            <button class="btn btn-ghost btn-sm" id="configLlmBtn">
-              <svg class="icon"><use href="#i-sliders" /></svg>LLM 配置
-            </button>
+            <button type="button" class="panel-hint llm-hint-btn" id="chatProviderHint">未配置 LLM</button>
+            <div class="head-right">
+              <button class="text-btn" id="clearChatBtn" hidden>清空会话</button>
+            </div>
           </div>
           <div class="chat-layout">
             <aside class="session-rail">
@@ -262,77 +267,21 @@
   </div>
 </div>
 
-<!-- Embedding 模型管理 -->
-<div class="modal-layer" id="providerModal" role="dialog" aria-modal="true" aria-labelledby="providerModalTitle" aria-hidden="true">
-  <div class="modal modal-wide">
+<!-- 设置：LLM 与 Embedding 收敛到一个入口 -->
+<div class="modal-layer" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true">
+  <div class="modal modal-wide settings-modal">
     <div class="modal-head">
-      <h2 id="providerModalTitle">Embedding 模型管理</h2>
-      <button class="icon-btn" data-close="providerModal" aria-label="关闭"><svg class="icon"><use href="#i-x" /></svg></button>
+      <h2 id="settingsTitle">设置</h2>
+      <button class="icon-btn" data-close="settingsModal" aria-label="关闭设置"><svg class="icon"><use href="#i-x" /></svg></button>
     </div>
-    <div class="modal-body">
-      <div class="field">
-        <label class="field-label" for="presetSelect">服务商预设</label>
-        <select id="presetSelect" class="input"></select>
-        <p class="note" id="presetNote"></p>
-      </div>
-      <div class="form-grid">
-        <div class="field">
-          <label class="field-label" for="pId">Provider ID <span class="required">*</span></label>
-          <input id="pId" class="input mono" type="text" placeholder="例如：dashscope" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="pName">显示名称</label>
-          <input id="pName" class="input" type="text" placeholder="例如：阿里百炼" autocomplete="off" />
-        </div>
-      </div>
-      <div class="field">
-        <label class="field-label" for="pBaseUrl">Base URL <span class="required">*</span></label>
-        <input id="pBaseUrl" class="input mono" type="text" placeholder="https://api.siliconflow.cn/v1" autocomplete="off" />
-        <p class="note">填到 /v1 为止，不要带 /embeddings</p>
-      </div>
-      <div class="form-grid">
-        <div class="field">
-          <label class="field-label" for="pModel">模型名称 <span class="required">*</span></label>
-          <input id="pModel" class="input mono" type="text" placeholder="BAAI/bge-m3" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="pKey">API Key</label>
-          <input id="pKey" class="input mono" type="text" placeholder="留空表示不需要" autocomplete="off" />
-        </div>
-      </div>
-      <div class="form-grid">
-        <div class="field">
-          <label class="field-label" for="pDim">向量维度 <span class="required">*</span></label>
-          <input id="pDim" class="input mono" type="number" min="1" placeholder="1024" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="pDimensions">dimensions 参数（可选）</label>
-          <input id="pDimensions" class="input mono" type="number" min="1" placeholder="留空则不发送" />
-        </div>
-      </div>
-      <div class="modal-foot split">
-        <div class="test-result" id="providerTest">填写配置后可测试连接</div>
-        <div class="foot-buttons">
-          <button class="btn btn-ghost" id="saveProviderBtn">仅保存</button>
-          <button class="btn btn-primary" id="testProviderBtn">保存并测试</button>
-        </div>
-      </div>
-      <div class="section-divider"></div>
-      <h3 class="section-title">已配置的 Provider <span class="panel-count" id="providerCount">0</span></h3>
-      <div id="providerList"><div class="empty-inline">加载中…</div></div>
-      <p class="note">API Key 以明文保存在 <code>data/embedding_providers.json</code>，请勿提交到公开仓库。</p>
-    </div>
-  </div>
-</div>
+    <nav class="settings-tabs" role="tablist" aria-label="设置分类">
+      <button class="settings-tab is-active" role="tab" id="stab-llm" data-settings-tab="llm" aria-selected="true" aria-controls="pane-llm">LLM 与生成参数</button>
+      <button class="settings-tab" role="tab" id="stab-embedding" data-settings-tab="embedding" aria-selected="false" aria-controls="pane-embedding">Embedding 模型</button>
+    </nav>
 
-<!-- LLM 配置 -->
-<div class="modal-layer" id="llmModal" role="dialog" aria-modal="true" aria-labelledby="llmModalTitle" aria-hidden="true">
-  <div class="modal modal-wide">
-    <div class="modal-head">
-      <h2 id="llmModalTitle">LLM 配置</h2>
-      <button class="icon-btn" data-close="llmModal" aria-label="关闭"><svg class="icon"><use href="#i-x" /></svg></button>
-    </div>
-    <div class="modal-body">
+    <!-- LLM -->
+    <div class="modal-body settings-pane" id="pane-llm" role="tabpanel" aria-labelledby="stab-llm">
+      <h3 class="section-title">新增 / 编辑模型</h3>
       <div class="field">
         <label class="field-label" for="llmPresetSelect">服务商预设</label>
         <select id="llmPresetSelect" class="input"></select>
@@ -360,7 +309,12 @@
         </div>
         <div class="field">
           <label class="field-label" for="llmKey">API Key</label>
-          <input id="llmKey" class="input mono" type="text" placeholder="已保存时留空即保留" autocomplete="off" />
+          <div class="input-wrap">
+            <input id="llmKey" class="input mono" type="password" placeholder="已保存时留空即保留" autocomplete="off" />
+            <button type="button" class="icon-btn reveal-btn" data-reveal="llmKey" aria-label="显示或隐藏 API Key" title="显示 / 隐藏">
+              <svg class="icon"><use href="#i-eye" /></svg>
+            </button>
+          </div>
           <label class="checkbox-line"><input id="llmClearKey" type="checkbox" />清除已保存的 Key</label>
         </div>
       </div>
@@ -371,34 +325,91 @@
           <button class="btn btn-primary" id="testLlmBtn">保存并测试</button>
         </div>
       </div>
-      <div class="section-divider"></div>
+
       <h3 class="section-title">已配置的模型 <span class="panel-count" id="llmProviderCount">0</span></h3>
       <div id="llmProviderList"><div class="empty-inline">加载中…</div></div>
-      <div class="section-divider"></div>
-      <details class="advanced" id="llmAdvanced" open>
-        <summary>生成参数与系统提示词</summary>
-        <div class="advanced-grid">
-          <div class="form-grid">
-            <div class="field">
-              <label class="field-label" for="llmTemperature">温度（0 ~ 2）</label>
-              <input id="llmTemperature" class="input mono" type="number" min="0" max="2" step="0.1" value="0.2" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="llmMaxTokens">最大回复 tokens</label>
-              <input id="llmMaxTokens" class="input mono" type="number" min="1" max="8192" step="1" value="1024" />
-            </div>
-          </div>
-          <div class="field">
-            <label class="field-label" for="llmSystemPrompt">系统提示词</label>
-            <textarea id="llmSystemPrompt" class="input" rows="3"></textarea>
-          </div>
-          <div class="modal-foot">
-            <button class="btn btn-ghost" id="resetLlmSystemBtn">恢复默认提示词</button>
-            <button class="btn btn-primary" id="saveLlmSettingsBtn">保存生成参数</button>
+      <p class="note">API Key 以明文保存在 <code>data/llm_providers.json</code>，请勿提交到公开仓库。</p>
+
+      <h3 class="section-title">生成参数与系统提示词</h3>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="llmTemperature">温度（0 ~ 2）</label>
+          <input id="llmTemperature" class="input mono" type="number" min="0" max="2" step="0.1" value="0.2" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="llmMaxTokens">最大回复 tokens</label>
+          <input id="llmMaxTokens" class="input mono" type="number" min="1" max="8192" step="1" value="1024" />
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="llmSystemPrompt">系统提示词</label>
+        <textarea id="llmSystemPrompt" class="input" rows="4"></textarea>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="resetLlmSystemBtn">恢复默认提示词</button>
+        <button class="btn btn-primary" id="saveLlmSettingsBtn">保存生成参数</button>
+      </div>
+    </div>
+
+    <!-- Embedding -->
+    <div class="modal-body settings-pane" id="pane-embedding" role="tabpanel" aria-labelledby="stab-embedding" hidden>
+      <h3 class="section-title">新增 / 编辑 Provider</h3>
+      <div class="field">
+        <label class="field-label" for="presetSelect">服务商预设</label>
+        <select id="presetSelect" class="input"></select>
+        <p class="note" id="presetNote"></p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="pId">Provider ID <span class="required">*</span></label>
+          <input id="pId" class="input mono" type="text" placeholder="例如：dashscope" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pName">显示名称</label>
+          <input id="pName" class="input" type="text" placeholder="例如：阿里百炼" autocomplete="off" />
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="pBaseUrl">Base URL <span class="required">*</span></label>
+        <input id="pBaseUrl" class="input mono" type="text" placeholder="https://api.siliconflow.cn/v1" autocomplete="off" />
+        <p class="note">填到 /v1 为止，不要带 /embeddings</p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="pModel">模型名称 <span class="required">*</span></label>
+          <input id="pModel" class="input mono" type="text" placeholder="BAAI/bge-m3" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pKey">API Key</label>
+          <div class="input-wrap">
+            <input id="pKey" class="input mono" type="password" placeholder="留空表示不需要" autocomplete="off" />
+            <button type="button" class="icon-btn reveal-btn" data-reveal="pKey" aria-label="显示或隐藏 API Key" title="显示 / 隐藏">
+              <svg class="icon"><use href="#i-eye" /></svg>
+            </button>
           </div>
         </div>
-      </details>
-      <p class="note">API Key 以明文保存在 <code>data/llm_providers.json</code>，请勿提交到公开仓库。</p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="pDim">向量维度 <span class="required">*</span></label>
+          <input id="pDim" class="input mono" type="number" min="1" placeholder="1024" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pDimensions">dimensions 参数（可选）</label>
+          <input id="pDimensions" class="input mono" type="number" min="1" placeholder="留空则不发送" />
+        </div>
+      </div>
+      <div class="modal-foot split">
+        <div class="test-result" id="providerTest">填写配置后可测试连接</div>
+        <div class="foot-buttons">
+          <button class="btn btn-ghost" id="saveProviderBtn">仅保存</button>
+          <button class="btn btn-primary" id="testProviderBtn">保存并测试</button>
+        </div>
+      </div>
+
+      <h3 class="section-title">已配置的 Provider <span class="panel-count" id="providerCount">0</span></h3>
+      <div id="providerList"><div class="empty-inline">加载中…</div></div>
+      <p class="note">API Key 以明文保存在 <code>data/embedding_providers.json</code>，请勿提交到公开仓库。</p>
     </div>
   </div>
 </div>

@@ -49,6 +49,31 @@
     return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
   }
 
+  /* 列表按缩进建树，支持两级以上嵌套（LLM 回答里很常见） */
+  function renderListNodes(nodes, ordered) {
+    const tag = ordered ? "ol" : "ul";
+    let attrs = "";
+    if (ordered) {
+      const start = Number(nodes[0] && nodes[0].num);
+      if (Number.isFinite(start) && start > 1) attrs = ` start="${start}"`;
+    }
+    return `<${tag}${attrs}>` + nodes.map((node) => {
+      const kids = node.children.length ? renderListNodes(node.children, node.ordered) : "";
+      return `<li>${inline(node.text)}${kids}</li>`;
+    }).join("") + `</${tag}>`;
+  }
+  function renderListTree(items) {
+    const root = { indent: -1, ordered: items[0].ordered, children: [] };
+    const stack = [root];
+    items.forEach((item) => {
+      while (stack.length > 1 && item.indent <= stack[stack.length - 1].indent) stack.pop();
+      const node = { indent: item.indent, ordered: item.ordered, text: item.text, num: item.num, children: [] };
+      stack[stack.length - 1].children.push(node);
+      stack.push(node);
+    });
+    return renderListNodes(root.children, root.ordered);
+  }
+
   function renderMarkdown(source) {
     const blocks = [];
     let value = String(source == null ? "" : source).replace(/\r\n?/g, "\n");
@@ -119,23 +144,32 @@
         continue;
       }
 
-      if (/^\s*[-*+]\s+/.test(line)) {
+      const listItem = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+      if (listItem) {
         const items = [];
-        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-          items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
-          i += 1;
+        while (i < lines.length) {
+          const item = lines[i].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+          if (item) {
+            items.push({
+              indent: item[1].replace(/\t/g, "  ").length,
+              ordered: /\d/.test(item[2]),
+              num: parseInt(item[2], 10),
+              text: item[3],
+            });
+            i += 1;
+            continue;
+          }
+          // 列表项之间允许出现空行：只有当下一段非空行仍是同层级的列表项时才继续
+          if (!lines[i].trim()) {
+            let next = i;
+            while (next < lines.length && !lines[next].trim()) next += 1;
+            const nextItem = next < lines.length && lines[next].match(/^(\s*)([-*+]|\d+[.)])\s+/);
+            const nextIndent = nextItem ? nextItem[1].replace(/\t/g, "  ").length : -1;
+            if (nextItem && nextIndent >= items[0].indent) { i = next; continue; }
+          }
+          break;
         }
-        out.push(`<ul>${items.map((item) => `<li>${inline(item)}</li>`).join("")}</ul>`);
-        continue;
-      }
-
-      if (/^\s*\d+[.)]\s+/.test(line)) {
-        const items = [];
-        while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-          items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
-          i += 1;
-        }
-        out.push(`<ol>${items.map((item) => `<li>${inline(item)}</li>`).join("")}</ol>`);
+        out.push(renderListTree(items));
         continue;
       }
 
