@@ -302,15 +302,14 @@
       item.onclick = () => selectKb(item.dataset.id);
     });
   }
+  // 页面头部元信息已移除，这里只同步仍依赖当前知识库的操作状态。
   function renderPageHead() {
     const kb = currentKb();
-    $("crumbName").textContent = kb ? kb.kb_name : "—";
-    $("pageTitle").textContent = kb ? kb.kb_name : "未选择知识库";
-    $("pageDesc").textContent = kb ? (kb.description || "暂无描述") : "从左侧选择或新建一个知识库开始";
-    $("statDocs").textContent = kb ? Number(kb.doc_count) || 0 : 0;
-    $("statChunks").textContent = kb ? Number(kb.chunk_count) || 0 : 0;
-    $("statProvider").textContent = kb ? kb.embedding_provider_id : "—";
-    $("deleteKbBtn").disabled = !kb;
+    const deleteBtn = $("deleteKbBtn");
+    const label = kb ? `删除知识库「${kb.kb_name}」` : "请先选择知识库";
+    deleteBtn.disabled = !kb;
+    deleteBtn.title = label;
+    deleteBtn.setAttribute("aria-label", label);
     const zone = $("dropZone");
     zone.classList.toggle("is-disabled", !kb);
     zone.setAttribute("aria-disabled", String(!kb));
