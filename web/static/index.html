@@ -34,6 +34,7 @@
   <symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-8.5 18-2.4-7.1L3 11.5 21 3Z"/><path d="m10.1 13.9 4.4-4.4"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 17h6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="m4 20 .9-4.2L16.2 4.5 19.5 7.8 8.2 19.1 4 20Z"/><path d="m14.5 6.2 3.3 3.3"/></symbol>
 </svg>
 
 <div class="app-shell">
@@ -73,11 +74,6 @@
       <div class="kb-list" id="kbList" role="listbox" aria-label="知识库列表">
         <div class="empty-inline">加载中…</div>
       </div>
-      <div class="sidebar-foot">
-        <div class="foot-label">检索引擎</div>
-        <div class="foot-value">FAISS · FTS5 / BM25</div>
-        <div class="foot-note">稠密 + 稀疏加权融合</div>
-      </div>
     </aside>
     <div class="sidebar-scrim" id="sidebarScrim"></div>
 
@@ -104,19 +100,19 @@
       </div>
 
       <nav class="tabs" role="tablist" aria-label="工作区视图">
-        <button class="tab is-active" role="tab" id="tab-docs" data-tab="docs" aria-selected="true" aria-controls="view-docs">
+        <button class="tab is-active" role="tab" id="tab-chat" data-tab="chat" aria-selected="true" aria-controls="view-chat">
+          <svg class="icon"><use href="#i-chat" /></svg>知识库对话
+        </button>
+        <button class="tab" role="tab" id="tab-docs" data-tab="docs" aria-selected="false" aria-controls="view-docs">
           <svg class="icon"><use href="#i-file" /></svg>文档管理
         </button>
         <button class="tab" role="tab" id="tab-search" data-tab="search" aria-selected="false" aria-controls="view-search">
           <svg class="icon"><use href="#i-search" /></svg>语义检索
         </button>
-        <button class="tab" role="tab" id="tab-chat" data-tab="chat" aria-selected="false" aria-controls="view-chat">
-          <svg class="icon"><use href="#i-chat" /></svg>知识库对话
-        </button>
       </nav>
 
       <!-- 文档视图 -->
-      <section class="view" id="view-docs" role="tabpanel" aria-labelledby="tab-docs">
+      <section class="view" id="view-docs" role="tabpanel" aria-labelledby="tab-docs" hidden>
         <div class="panel">
           <div class="panel-head">
             <h2>上传文档</h2>
@@ -191,35 +187,48 @@
         </div>
       </section>
 
-      <!-- 知识库对话 -->
-      <section class="view" id="view-chat" role="tabpanel" aria-labelledby="tab-chat" hidden>
+      <!-- 知识库对话（首页） -->
+      <section class="view" id="view-chat" role="tabpanel" aria-labelledby="tab-chat">
         <div class="panel chat-panel">
           <div class="panel-head">
             <h2>知识库对话</h2>
             <span class="panel-hint" id="chatProviderHint">未配置 LLM</span>
-            <button class="text-btn" id="clearChatBtn" hidden>清空对话</button>
+            <button class="text-btn" id="clearChatBtn" hidden>清空当前会话</button>
             <button class="btn btn-ghost btn-sm" id="configLlmBtn">
               <svg class="icon"><use href="#i-sliders" /></svg>LLM 配置
             </button>
           </div>
-          <div class="chat-scope">
-            <span class="field-label">上下文知识库</span>
-            <div class="scope-chips" id="chatScopeChips"><span class="muted">加载中…</span></div>
-          </div>
-          <div class="chat-messages" id="chatMessages" aria-live="polite">
-            <div class="chat-welcome">
-              <span class="chat-welcome-icon"><svg class="icon"><use href="#i-sparkle" /></svg></span>
-              <strong>基于知识库内容回答</strong>
-              <p>回答只会引用所选知识库中的资料，并标注来源；资料不足时会明确告知。</p>
+          <div class="chat-layout">
+            <aside class="session-rail">
+              <div class="session-rail-head">
+                <span>会话</span>
+                <button class="icon-btn" id="newChatSessionBtn" title="新建会话" aria-label="新建会话">
+                  <svg class="icon"><use href="#i-plus" /></svg>
+                </button>
+              </div>
+              <div class="session-list" id="chatSessionList"><div class="empty-inline">加载中…</div></div>
+            </aside>
+            <div class="chat-main">
+              <div class="chat-scope">
+                <span class="field-label">上下文知识库</span>
+                <div class="scope-chips" id="chatScopeChips"><span class="muted">加载中…</span></div>
+              </div>
+              <div class="chat-messages" id="chatMessages" aria-live="polite">
+                <div class="chat-welcome">
+                  <span class="chat-welcome-icon"><svg class="icon"><use href="#i-sparkle" /></svg></span>
+                  <strong>基于知识库内容回答</strong>
+                  <p>回答只会引用所选知识库中的资料，悬停引用标记可查看原文；资料不足时会明确告知。</p>
+                </div>
+              </div>
+              <div class="composer">
+                <textarea id="chatInput" class="input" rows="2" placeholder="基于所选知识库提问…"></textarea>
+                <button class="btn btn-primary" id="chatSendBtn" disabled>
+                  <svg class="icon"><use href="#i-send" /></svg><span>发送</span>
+                </button>
+              </div>
+              <p class="composer-hint">Enter 发送 · Shift + Enter 换行 · 会话按知识库保存，刷新不丢失</p>
             </div>
           </div>
-          <div class="composer">
-            <textarea id="chatInput" class="input" rows="2" placeholder="基于当前知识库提问…"></textarea>
-            <button class="btn btn-primary" id="chatSendBtn" disabled>
-              <svg class="icon"><use href="#i-send" /></svg><span>发送</span>
-            </button>
-          </div>
-          <p class="composer-hint">Enter 发送 · Shift + Enter 换行 · 切换知识库会清空当前对话</p>
         </div>
       </section>
     </main>
@@ -407,6 +416,23 @@
         </div>
       </details>
       <p class="note">API Key 以明文保存在 <code>data/llm_providers.json</code>，请勿提交到公开仓库。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 重命名会话 -->
+<div class="modal-layer" id="sessionModal" role="dialog" aria-modal="true" aria-labelledby="sessionModalTitle" aria-hidden="true">
+  <div class="modal modal-confirm">
+    <div class="modal-body">
+      <h2 id="sessionModalTitle">重命名会话</h2>
+      <div class="field session-title-field">
+        <label class="field-label" for="sessionTitleInput">会话名称</label>
+        <input id="sessionTitleInput" class="input" type="text" maxlength="40" autocomplete="off" />
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="sessionCancel">取消</button>
+        <button class="btn btn-primary" id="sessionSave">保存</button>
+      </div>
     </div>
   </div>
 </div>

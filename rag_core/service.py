@@ -415,6 +415,7 @@ class KBService:
                 "doc_name": result.get("doc_name"),
                 "chunk_index": result.get("chunk_index", 0),
                 "score": score,
+                "content": result.get("content", ""),
             }
             sources.append(source)
             blocks.append(

@@ -4,6 +4,8 @@
 
   const $ = (id) => document.getElementById(id);
   const STORAGE_KEY = "rag-web.currentKb";
+  const CHAT_STORAGE_KEY = "rag-web.chatSessions";
+  const ACTIVE_CHAT_KEY = "rag-web.activeChatSession";
 
   const state = {
     kbs: [],
@@ -14,10 +16,11 @@
     scope: new Set(),
     results: null,
     kbListError: null,
-    activeTab: "docs",
+    activeTab: "chat",
     llm: null,
     chatScope: new Set(),
-    chatMessages: [],
+    chatSessions: readChatSessions(),
+    activeChatSessionId: readActiveChatSession(),
     chatBusy: false,
   };
 
@@ -29,6 +32,25 @@
       if (state.currentKbId) localStorage.setItem(STORAGE_KEY, state.currentKbId);
       else localStorage.removeItem(STORAGE_KEY);
     } catch (_) { /* 隐私模式下忽略 */ }
+  }
+  function readChatSessions() {
+    try {
+      const value = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || "[]");
+      return Array.isArray(value) ? value.filter((s) => s && s.id && s.kbId && Array.isArray(s.messages)) : [];
+    } catch (_) { return []; }
+  }
+  function readActiveChatSession() {
+    try { return localStorage.getItem(ACTIVE_CHAT_KEY) || null; } catch (_) { return null; }
+  }
+  function saveChatSessions() {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(state.chatSessions.slice(-40)));
+      if (state.activeChatSessionId) localStorage.setItem(ACTIVE_CHAT_KEY, state.activeChatSessionId);
+      else localStorage.removeItem(ACTIVE_CHAT_KEY);
+    } catch (_) { /* 存储不可用或超限时忽略 */ }
+  }
+  function makeId() {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
   const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (c) => ({
@@ -224,7 +246,6 @@
 
   /* ---------- 知识库 ---------- */
   async function loadKbs() {
-    const previousKbId = state.currentKbId;
     try {
       state.kbs = await api.kbs();
       state.kbListError = null;
@@ -241,7 +262,8 @@
     renderKbList();
     renderPageHead();
     resetScope();
-    resetChatScope(previousKbId !== state.currentKbId);
+    resetChatScope();
+    ensureChatSession();
     await loadDocs();
   }
   function selectKb(id) {
@@ -251,7 +273,8 @@
     renderKbList();
     renderPageHead();
     resetScope();
-    resetChatScope(true);
+    resetChatScope();
+    ensureChatSession();
     loadDocs();
     closeSidebar();
   }
@@ -596,15 +619,175 @@
     return saved;
   }
 
-  /* ---------- 知识库对话 ---------- */
-  function resetChatScope(clearHistory) {
+  /* ---------- 知识库对话与会话管理 ---------- */
+  const NEW_SESSION_TITLE = "新会话";
+
+  function activeSession() {
+    return state.chatSessions.find((s) => s.id === state.activeChatSessionId) || null;
+  }
+  function sessionsForKb(kbId) {
+    return state.chatSessions
+      .filter((s) => s.kbId === kbId)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }
+  function touchSession(session) {
+    if (!session) return;
+    session.updatedAt = Date.now();
+    if (session.title === NEW_SESSION_TITLE) {
+      const first = (session.messages || []).find((m) => m.role === "user");
+      const text = first ? String(first.content || "") : "";
+      if (text) session.title = text.slice(0, 24) + (text.length > 24 ? "…" : "");
+    }
+    saveChatSessions();
+  }
+  function createChatSession() {
+    if (state.chatBusy) { toast("请等待当前回答完成", "error"); return null; }
+    if (!state.currentKbId) { toast("请先选择知识库", "error"); return null; }
+    const session = {
+      id: makeId(), kbId: state.currentKbId, title: NEW_SESSION_TITLE,
+      messages: [], updatedAt: Date.now(),
+    };
+    state.chatSessions.push(session);
+    state.activeChatSessionId = session.id;
+    saveChatSessions();
+    renderChatSessions();
+    renderChat();
+    renderLlmStatus();
+    return session;
+  }
+  function ensureChatSession() {
+    if (!state.currentKbId) {
+      state.activeChatSessionId = null;
+      saveChatSessions();
+      renderChatSessions();
+      renderChat();
+      renderLlmStatus();
+      return;
+    }
+    let active = activeSession();
+    if (!active || active.kbId !== state.currentKbId) {
+      active = sessionsForKb(state.currentKbId)[0] || null;
+      if (!active) {
+        active = {
+          id: makeId(), kbId: state.currentKbId, title: NEW_SESSION_TITLE,
+          messages: [], updatedAt: Date.now(),
+        };
+        state.chatSessions.push(active);
+      }
+      state.activeChatSessionId = active.id;
+      saveChatSessions();
+    }
+    renderChatSessions();
+    renderChat();
+    renderLlmStatus();
+  }
+  function switchChatSession(id) {
+    if (state.chatBusy) { toast("请等待当前回答完成", "error"); return; }
+    if (id === state.activeChatSessionId) return;
+    state.activeChatSessionId = id;
+    saveChatSessions();
+    renderChatSessions();
+    renderChat();
+    renderLlmStatus();
+  }
+  function formatSessionTime(ts) {
+    const d = new Date(ts || Date.now());
+    if (isNaN(d.getTime())) return "刚刚";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    if (d >= today) return `今天 ${time}`;
+    if (d >= yesterday) return `昨天 ${time}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function renameChatSession(id) {
+    const session = state.chatSessions.find((s) => s.id === id);
+    if (!session) return Promise.resolve(null);
+    $("sessionTitleInput").value = session.title || "";
+    openModal("sessionModal", "sessionTitleInput");
+    return new Promise((resolve) => {
+      function finish(value) {
+        closeModal("sessionModal");
+        $("sessionSave").onclick = null;
+        $("sessionCancel").onclick = null;
+        $("sessionTitleInput").onkeydown = null;
+        resolve(value);
+      }
+      $("sessionSave").onclick = () => {
+        const value = $("sessionTitleInput").value.trim();
+        if (!value) return toast("请输入会话名称", "error");
+        finish(value);
+      };
+      $("sessionCancel").onclick = () => finish(null);
+      $("sessionTitleInput").onkeydown = (e) => {
+        if (e.key === "Enter") { e.preventDefault(); $("sessionSave").click(); }
+      };
+    });
+  }
+  async function deleteChatSession(id) {
+    if (state.chatBusy) { toast("请等待当前回答完成", "error"); return; }
+    const session = state.chatSessions.find((s) => s.id === id);
+    if (!session) return;
+    const ok = await confirmDialog({
+      title: "删除会话？",
+      message: `「${session.title}」及其消息会从本机删除，此操作不可撤销。`,
+      okText: "删除",
+    });
+    if (!ok) return;
+    state.chatSessions = state.chatSessions.filter((s) => s.id !== id);
+    if (state.activeChatSessionId === id) state.activeChatSessionId = null;
+    saveChatSessions();
+    ensureChatSession();
+    toast("会话已删除", "success");
+  }
+  function renderChatSessions() {
+    const el = $("chatSessionList");
+    if (!state.currentKbId) {
+      el.innerHTML = '<div class="empty-inline">请选择知识库</div>';
+      return;
+    }
+    const sessions = sessionsForKb(state.currentKbId);
+    if (!sessions.length) {
+      el.innerHTML = '<div class="empty-inline">还没有会话，点击上方 + 新建</div>';
+      return;
+    }
+    el.innerHTML = sessions.map((s) => {
+      const last = [...(s.messages || [])].reverse().find((m) => !m.pending && !m.error);
+      const preview = last ? String(last.content || "").slice(0, 26) : "暂无消息";
+      const isActive = s.id === state.activeChatSessionId;
+      return `<div class="session-item ${isActive ? "is-active" : ""}" data-session="${esc(s.id)}">
+        <button class="session-open" title="${esc(s.title)}">
+          <span class="session-title">${esc(s.title)}</span>
+          <span class="session-meta">${formatSessionTime(s.updatedAt)} · ${esc(preview)}</span>
+        </button>
+        <span class="session-actions">
+          <button class="icon-btn" data-rename="${esc(s.id)}" title="重命名会话" aria-label="重命名 ${esc(s.title)}">${ico("edit")}</button>
+          <button class="icon-btn" data-delete="${esc(s.id)}" title="删除会话" aria-label="删除 ${esc(s.title)}">${ico("trash")}</button>
+        </span>
+      </div>`;
+    }).join("");
+    el.querySelectorAll(".session-open").forEach((btn) => {
+      btn.onclick = () => switchChatSession(btn.closest(".session-item").dataset.session);
+    });
+    el.querySelectorAll("button[data-rename]").forEach((btn) => {
+      btn.onclick = async () => {
+        const title = await renameChatSession(btn.dataset.rename);
+        if (!title) return;
+        const session = state.chatSessions.find((s) => s.id === btn.dataset.rename);
+        if (session) session.title = title;
+        saveChatSessions();
+        renderChatSessions();
+        toast("会话已重命名", "success");
+      };
+    });
+    el.querySelectorAll("button[data-delete]").forEach((btn) => {
+      btn.onclick = () => deleteChatSession(btn.dataset.delete);
+    });
+  }
+  function resetChatScope() {
     state.chatScope.clear();
     if (state.currentKbId) state.chatScope.add(state.currentKbId);
     renderChatScope();
-    if (clearHistory) {
-      state.chatMessages = [];
-      renderChat();
-    }
     renderLlmStatus();
   }
   function renderChatScope() {
@@ -626,29 +809,81 @@
       };
     });
   }
+
+  let sourcePopoverTimer = null;
+  function hideSourcePopover(delay) {
+    clearTimeout(sourcePopoverTimer);
+    sourcePopoverTimer = setTimeout(() => {
+      const pop = $("sourcePopover");
+      if (pop) pop.remove();
+    }, delay || 0);
+  }
+  function showSourcePopover(anchor, source) {
+    if (!source) return;
+    clearTimeout(sourcePopoverTimer);
+    let pop = $("sourcePopover");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.id = "sourcePopover";
+      pop.className = "source-popover";
+      pop.onmouseenter = () => clearTimeout(sourcePopoverTimer);
+      pop.onmouseleave = () => hideSourcePopover(0);
+      document.body.appendChild(pop);
+    }
+    const index = Number(source.index) || 0;
+    pop.innerHTML = `
+      <div class="source-popover-head">
+        <strong>[${index}]</strong><span>${esc(source.kb_name)} / ${esc(source.doc_name)}</span><span>块 ${Number(source.chunk_index) || 0}</span>
+      </div>
+      <div class="source-popover-body"></div>`;
+    pop.querySelector(".source-popover-body").textContent = source.content || "（该分块没有正文）";
+    const rect = anchor.getBoundingClientRect();
+    pop.style.visibility = "hidden";
+    pop.style.left = "0px";
+    pop.style.top = "0px";
+    const width = pop.offsetWidth || 360;
+    const height = pop.offsetHeight || 200;
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+    let top = rect.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = Math.max(12, rect.top - height - 8);
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    pop.style.visibility = "visible";
+  }
+
   function renderChat() {
     const el = $("chatMessages");
-    $("clearChatBtn").hidden = state.chatMessages.length === 0;
-    if (!state.chatMessages.length) {
+    const messages = activeSession() ? activeSession().messages || [] : [];
+    $("clearChatBtn").hidden = messages.length === 0;
+    if (!messages.length) {
       el.innerHTML = `
         <div class="chat-welcome">
           <span class="chat-welcome-icon">${ico("sparkle")}</span>
           <strong>基于知识库内容回答</strong>
-          <p>回答只会引用所选知识库中的资料，并标注来源；资料不足时会明确告知。</p>
+          <p>回答只会引用所选知识库中的资料，悬停引用标记可查看原文；资料不足时会明确告知。</p>
         </div>`;
       return;
     }
-    el.innerHTML = state.chatMessages.map((m) => `
+    el.innerHTML = messages.map((m) => `
       <div class="chat-msg ${esc(m.role)}${m.error ? " error" : ""}">
         <span class="chat-avatar">${ico(m.role === "user" ? "user" : m.error ? "alert" : "bot")}</span>
         <div class="chat-bubble-main">
           <div class="chat-bubble"></div>
-          ${m.sources && m.sources.length ? `<div class="chat-sources">${m.sources.map((s) => `<span class="source-chip">[${Number(s.index) || 0}] ${esc(s.kb_name)} / ${esc(s.doc_name)} · ${formatScore(s.score)}</span>`).join("")}</div>` : ""}
+          ${m.sources && m.sources.length ? `<div class="chat-sources">${m.sources.map((s) => `<button type="button" class="source-chip" data-source-index="${Number(s.index) || 0}">[${Number(s.index) || 0}] ${esc(s.kb_name)} / ${esc(s.doc_name)}</button>`).join("")}</div>` : ""}
           ${m.provider ? `<div class="chat-meta">模型：${esc(m.provider)}${m.usage && m.usage.total_tokens ? ` · ${m.usage.total_tokens} tokens` : ""}</div>` : ""}
         </div>
       </div>`).join("");
-    el.querySelectorAll(".chat-bubble").forEach((node, i) => {
-      node.textContent = state.chatMessages[i].content || "";
+    el.querySelectorAll(".chat-msg").forEach((msgEl, i) => {
+      const bubble = msgEl.querySelector(".chat-bubble");
+      if (bubble) bubble.textContent = messages[i].content || "";
+      msgEl.querySelectorAll(".source-chip").forEach((chip) => {
+        const source = (messages[i].sources || []).find((s) => String(s.index) === chip.dataset.sourceIndex);
+        chip.onmouseenter = () => showSourcePopover(chip, source);
+        chip.onmouseleave = () => hideSourcePopover(120);
+        chip.onfocus = () => showSourcePopover(chip, source);
+        chip.onblur = () => hideSourcePopover(120);
+        chip.onclick = (e) => { e.stopPropagation(); showSourcePopover(chip, source); };
+      });
     });
     el.scrollTop = el.scrollHeight;
   }
@@ -659,33 +894,41 @@
     if (!state.chatScope.size) { toast("请至少选择一个知识库", "error"); return; }
     if (!state.llm || !state.llm.active_id) { toast("请先配置并启用 LLM 模型", "error"); openLlmModal(); return; }
 
+    const session = activeSession() || createChatSession();
+    if (!session) return;
     const kbNames = state.kbs.filter((kb) => state.chatScope.has(kb.kb_id)).map((kb) => kb.kb_name);
-    state.chatMessages.push({ role: "user", content: text });
+    session.messages.push({ role: "user", content: text });
+    touchSession(session);
     $("chatInput").value = "";
-    state.chatMessages.push({ role: "assistant", content: "正在检索知识库并生成回答…", pending: true });
+    session.messages.push({ role: "assistant", content: "正在检索知识库并生成回答…", pending: true });
     renderChat();
+    renderChatSessions();
 
     state.chatBusy = true;
     renderLlmStatus();
     setLoading($("chatSendBtn"), true, "回答中…");
     try {
-      const history = state.chatMessages
+      const history = session.messages
         .filter((m) => !m.pending && !m.error)
         .map((m) => ({ role: m.role, content: m.content }));
       const data = await api.chat(history, kbNames);
-      state.chatMessages.pop();
-      state.chatMessages.push({
+      session.messages.pop();
+      session.messages.push({
         role: "assistant",
         content: data.answer || "（模型未返回内容）",
         sources: data.sources || [],
         usage: data.usage || {},
         provider: data.provider_id,
       });
+      touchSession(session);
       renderChat();
+      renderChatSessions();
     } catch (err) {
-      state.chatMessages.pop();
-      state.chatMessages.push({ role: "assistant", content: `生成失败：${err.message}`, error: true });
+      session.messages.pop();
+      session.messages.push({ role: "assistant", content: `生成失败：${err.message}`, error: true });
+      touchSession(session);
       renderChat();
+      renderChatSessions();
       toast(err.message, "error");
     } finally {
       state.chatBusy = false;
@@ -707,8 +950,7 @@
     $("view-chat").hidden = tab !== "chat";
     if (tab === "chat") {
       renderChatScope();
-      renderChat();
-      renderLlmStatus();
+      ensureChatSession();
     }
   }
   function openSidebar() { $("sidebar").classList.add("is-open"); $("sidebarScrim").classList.add("is-open"); }
@@ -789,11 +1031,21 @@
     $("chatInput").onkeydown = (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
     };
+    $("newChatSessionBtn").onclick = () => createChatSession();
     $("clearChatBtn").onclick = () => {
-      state.chatMessages = [];
+      if (state.chatBusy) { toast("请等待当前回答完成", "error"); return; }
+      const session = activeSession();
+      if (!session) return;
+      session.messages = [];
+      touchSession(session);
       renderChat();
-      toast("对话已清空", "success");
+      renderChatSessions();
+      toast("当前会话已清空", "success");
     };
+    document.addEventListener("click", (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target || (!target.closest(".source-chip") && !target.closest("#sourcePopover"))) hideSourcePopover(0);
+    });
     document.querySelectorAll("[data-close]").forEach((btn) => {
       btn.onclick = () => closeModal(btn.dataset.close);
     });
@@ -967,6 +1219,7 @@
     try {
       await loadLlmConfig();
     } catch (err) { toast(`LLM 配置加载失败：${err.message}`, "error"); }
+    ensureChatSession();
   }
   init();
 })();
