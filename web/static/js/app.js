@@ -91,16 +91,35 @@
     }, 2800);
   }
 
+  /* ---------- 弹窗 ---------- */
+  let lastFocused = null;
+  function focusables(root) {
+    return Array.from(root.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter((el) => el.offsetParent !== null);
+  }
   function openModal(id, focusId) {
     const el = $(id);
+    if (!lastFocused) lastFocused = document.activeElement;
     el.classList.add("is-open");
     el.setAttribute("aria-hidden", "false");
-    if (focusId) setTimeout(() => $(focusId) && $(focusId).focus(), 0);
+    const target = focusId ? $(focusId) : null;
+    setTimeout(() => {
+      if (target) target.focus();
+      else {
+        const items = focusables(el);
+        if (items.length) items[0].focus();
+      }
+    }, 0);
   }
   function closeModal(id) {
     const el = $(id);
     el.classList.remove("is-open");
     el.setAttribute("aria-hidden", "true");
+    if (!anyModalOpen()) {
+      if (lastFocused && lastFocused.isConnected && lastFocused.focus) lastFocused.focus();
+      lastFocused = null;
+    }
   }
   function anyModalOpen() {
     return Array.from(document.querySelectorAll(".modal-layer")).some((el) => el.classList.contains("is-open"));
@@ -127,13 +146,17 @@
   function setLoading(btn, loading, loadingText) {
     if (!btn) return;
     if (loading) {
-      btn.dataset.label = btn.innerHTML;
+      if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = `${ico("sparkle")}<span>${esc(loadingText || "处理中…")}</span>`;
+      btn.classList.add("is-loading");
+      btn.setAttribute("aria-busy", "true");
+      btn.innerHTML = `${ico("spinner", "icon spin")}<span>${esc(loadingText || "处理中…")}</span>`;
     } else if (btn.dataset.label) {
       btn.innerHTML = btn.dataset.label;
       delete btn.dataset.label;
       btn.disabled = false;
+      btn.classList.remove("is-loading");
+      btn.removeAttribute("aria-busy");
     }
   }
 
@@ -143,10 +166,12 @@
     try {
       await api.health();
       chip.className = "health-chip is-ok";
+      chip.title = "服务正常";
       $("healthText").textContent = "服务正常";
     } catch (err) {
       chip.className = "health-chip is-bad";
-      $("healthText").textContent = err.message;
+      chip.title = err.message || "服务异常";
+      $("healthText").textContent = "服务异常";
     }
   }
 
@@ -289,27 +314,54 @@
       el.innerHTML = '<div class="empty-inline">还没有知识库，点击上方按钮创建</div>';
       return;
     }
-    el.innerHTML = state.kbs.map((kb) => `
-      <button class="kb-item ${kb.kb_id === state.currentKbId ? "is-active" : ""}" role="option"
-        aria-selected="${kb.kb_id === state.currentKbId}" data-id="${esc(kb.kb_id)}">
-        <span class="kb-emoji">${esc(kb.emoji || "📚")}</span>
+    el.innerHTML = state.kbs.map((kb) => {
+      const active = kb.kb_id === state.currentKbId;
+      return `
+      <div class="kb-item ${active ? "is-active" : ""}" role="option" tabindex="0"
+        aria-selected="${active}" data-id="${esc(kb.kb_id)}">
+        <span class="kb-emoji">${ico("layers")}</span>
         <span class="kb-item-main">
           <span class="kb-item-name">${esc(kb.kb_name)}</span>
           <span class="kb-item-meta">${Number(kb.doc_count) || 0} 文档 · ${Number(kb.chunk_count) || 0} 块 · ${esc(kb.embedding_provider_id)}</span>
         </span>
-      </button>`).join("");
+        <span class="kb-actions">
+          <button class="icon-btn" data-kb-delete="${esc(kb.kb_id)}" title="删除知识库"
+            aria-label="删除知识库「${esc(kb.kb_name)}」">${ico("trash")}</button>
+        </span>
+      </div>`;
+    }).join("");
     el.querySelectorAll(".kb-item").forEach((item) => {
-      item.onclick = () => selectKb(item.dataset.id);
+      const open = () => selectKb(item.dataset.id);
+      item.onclick = open;
+      item.onkeydown = (e) => {
+        if (e.target !== item) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      };
     });
+    el.querySelectorAll("button[data-kb-delete]").forEach((btn) => {
+      btn.onclick = (e) => { e.stopPropagation(); confirmDeleteKb(btn.dataset.kbDelete); };
+    });
+  }
+  async function confirmDeleteKb(kbId) {
+    const kb = state.kbs.find((item) => item.kb_id === kbId);
+    if (!kb) return;
+    const ok = await confirmDialog({
+      title: "删除整个知识库？",
+      message: `「${kb.kb_name}」的全部文档与向量索引都会被删除，此操作不可撤销。`,
+      okText: "删除知识库",
+    });
+    if (!ok) return;
+    try {
+      await api.deleteKb(kb.kb_id);
+      if (state.currentKbId === kb.kb_id) state.currentKbId = null;
+      saveSelection();
+      toast("知识库已删除", "success");
+      await loadKbs();
+    } catch (err) { toast(err.message, "error"); }
   }
   // 页面头部元信息已移除，这里只同步仍依赖当前知识库的操作状态。
   function renderPageHead() {
     const kb = currentKb();
-    const deleteBtn = $("deleteKbBtn");
-    const label = kb ? `删除知识库「${kb.kb_name}」` : "请先选择知识库";
-    deleteBtn.disabled = !kb;
-    deleteBtn.title = label;
-    deleteBtn.setAttribute("aria-label", label);
     const zone = $("dropZone");
     zone.classList.toggle("is-disabled", !kb);
     zone.setAttribute("aria-disabled", String(!kb));
@@ -338,7 +390,7 @@
     const el = $("docList");
     $("docCount").textContent = state.docs.length;
     if (!state.currentKbId) {
-      el.innerHTML = '<div class="empty-state">请选择知识库</div>';
+      el.innerHTML = `<div class="empty-state">${ico("layers", "empty-icon")}<p>还没有选择知识库</p><span>在左侧选择一个知识库，或先新建一个</span></div>`;
       return;
     }
     if (!state.docs.length) {
@@ -377,22 +429,34 @@
   }
   async function uploadFiles(files) {
     if (!state.currentKbId || !files.length) return;
+    const kbId = state.currentKbId;
     const zone = $("dropZone");
-    zone.classList.add("is-over");
+    const status = $("uploadStatus");
+    const nameEl = status.querySelector(".upload-name");
+    const countEl = status.querySelector(".upload-count");
+    zone.classList.add("is-busy");
     zone.setAttribute("aria-busy", "true");
+    status.hidden = false;
     let ok = 0;
+    let index = 0;
     const failures = [];
     for (const file of files) {
+      index += 1;
+      nameEl.textContent = file.name;
+      countEl.textContent = `${index}/${files.length}`;
       try {
-        const doc = await api.uploadDocument(state.currentKbId, file);
+        const doc = await api.uploadDocument(kbId, file);
         ok += 1;
         toast(`已入库「${doc.doc_name}」· ${doc.chunk_count} 块`, "success");
       } catch (err) {
         failures.push(`${file.name}：${err.message}`);
       }
     }
-    zone.classList.remove("is-over");
+    zone.classList.remove("is-busy");
     zone.removeAttribute("aria-busy");
+    status.hidden = true;
+    nameEl.textContent = "";
+    countEl.textContent = "";
     if (failures.length) toast(failures[0] + (failures.length > 1 ? `（另有 ${failures.length - 1} 个失败）` : ""), "error");
     if (ok) await loadKbs();
   }
@@ -469,18 +533,21 @@
           <span class="result-source"><strong>${esc(r.kb_name)}</strong> / ${esc(r.doc_name)} · 块 ${Number(r.chunk_index) || 0}</span>
           <span class="score">${formatScore(r.score)}</span>
         </div>
-        <div class="result-body"></div>
+        <div class="result-body md"></div>
       </div>`).join("");
-    // textContent 写入正文，避免任何 HTML 注入
-    $("results").querySelectorAll(".result-body").forEach((el, i) => { el.textContent = results[i].content || ""; });
+    // renderMarkdown 内部先转义 HTML，再解析语法，不会有注入风险
+    $("results").querySelectorAll(".result-body").forEach((el, i) => {
+      const content = results[i].content || "";
+      el.innerHTML = window.renderMarkdown ? window.renderMarkdown(content) : esc(content);
+    });
     $("contextText").textContent = data.context_text || "";
     $("contextPanel").hidden = false;
   }
-  async function copyContext() {
-    const text = $("contextText").textContent;
+  async function copyText(text, okMessage) {
     try {
       await navigator.clipboard.writeText(text);
-      toast("已复制上下文", "success");
+      toast(okMessage || "已复制", "success");
+      return true;
     } catch (_) {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -488,8 +555,12 @@
       ta.select();
       const ok = document.execCommand("copy");
       ta.remove();
-      toast(ok ? "已复制上下文" : "复制失败，请手动选择文本", ok ? "success" : "error");
+      toast(ok ? (okMessage || "已复制") : "复制失败，请手动选择文本", ok ? "success" : "error");
+      return ok;
     }
+  }
+  function copyContext() {
+    return copyText($("contextText").textContent, "已复制上下文");
   }
 
   /* ---------- LLM 配置 ---------- */
@@ -501,11 +572,20 @@
   }
   function renderLlmStatus() {
     const active = state.llm && state.llm.providers.find((p) => p.is_active);
-    $("chatProviderHint").textContent = active ? `LLM：${active.name} · ${active.model}` : "未配置 LLM";
+    const hint = $("chatProviderHint");
+    if (active) {
+      hint.textContent = `LLM：${active.name} · ${active.model}`;
+      hint.classList.remove("is-link");
+      hint.title = "打开设置";
+    } else {
+      hint.textContent = "未配置 LLM · 去设置";
+      hint.classList.add("is-link");
+      hint.title = "打开设置，配置并启用对话模型";
+    }
     const canChat = Boolean(active && state.currentKbId && state.chatScope.size);
     $("chatSendBtn").disabled = !canChat || state.chatBusy;
     $("chatInput").disabled = !canChat || state.chatBusy;
-    $("chatInput").placeholder = active ? "基于所选知识库提问…" : "请先在 LLM 配置中启用模型";
+    $("chatInput").placeholder = active ? "基于所选知识库提问…" : "请先在设置中启用模型";
   }
   function renderLlmProviderList() {
     const el = $("llmProviderList");
@@ -567,16 +647,46 @@
     $("llmMaxTokens").value = s.max_tokens == null ? 1024 : s.max_tokens;
     $("llmSystemPrompt").value = s.system_prompt || "";
   }
-  function openLlmModal() {
-    closeSidebar();
-    openModal("llmModal", "llmPresetSelect");
-    loadLlmConfig()
+  function switchSettingsTab(tab) {
+    const target = tab === "embedding" ? "embedding" : "llm";
+    document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
+      const active = btn.dataset.settingsTab === target;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", String(active));
+    });
+    $("pane-llm").hidden = target !== "llm";
+    $("pane-embedding").hidden = target !== "embedding";
+  }
+  const panelLoaded = { llm: false, embedding: false };
+  function loadLlmPanel() {
+    if (panelLoaded.llm) return Promise.resolve();
+    panelLoaded.llm = true;
+    return loadLlmConfig()
       .then(() => {
         const presets = (state.llm && state.llm.presets) || [];
         $("llmPresetSelect").innerHTML = presets.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join("");
         if (presets.length) applyLlmPreset(0);
       })
-      .catch((err) => toast(err.message, "error"));
+      .catch((err) => { panelLoaded.llm = false; toast(err.message, "error"); });
+  }
+  function loadEmbeddingPanel() {
+    if (panelLoaded.embedding) return Promise.resolve();
+    panelLoaded.embedding = true;
+    return Promise.all([loadPresets(), loadProviders()])
+      .catch((err) => { panelLoaded.embedding = false; toast(err.message, "error"); });
+  }
+  function selectSettingsTab(tab) {
+    const target = tab === "embedding" ? "embedding" : "llm";
+    switchSettingsTab(target);
+    if (target === "llm") loadLlmPanel();
+    else loadEmbeddingPanel();
+  }
+  function openSettings(tab) {
+    closeSidebar();
+    panelLoaded.llm = false;
+    panelLoaded.embedding = false;
+    openModal("settingsModal");
+    selectSettingsTab(tab);
   }
   function applyLlmPreset(index) {
     const p = state.llm && state.llm.presets && state.llm.presets[index];
@@ -752,7 +862,7 @@
     }
     el.innerHTML = sessions.map((s) => {
       const last = [...(s.messages || [])].reverse().find((m) => !m.pending && !m.error);
-      const preview = last ? String(last.content || "").slice(0, 26) : "暂无消息";
+      const preview = last ? stripMd(last.content).slice(0, 26) : "暂无消息";
       const isActive = s.id === state.activeChatSessionId;
       return `<div class="session-item ${isActive ? "is-active" : ""}" data-session="${esc(s.id)}">
         <button class="session-open" title="${esc(s.title)}">
@@ -834,8 +944,11 @@
       <div class="source-popover-head">
         <strong>[${index}]</strong><span>${esc(source.kb_name)} / ${esc(source.doc_name)}</span><span>块 ${Number(source.chunk_index) || 0}</span>
       </div>
-      <div class="source-popover-body"></div>`;
-    pop.querySelector(".source-popover-body").textContent = source.content || "（该分块没有正文）";
+      <div class="source-popover-body md"></div>`;
+    const body = pop.querySelector(".source-popover-body");
+    const content = source.content || "";
+    if (content && window.renderMarkdown) body.innerHTML = window.renderMarkdown(content);
+    else body.textContent = content || "（该分块没有正文）";
     const rect = anchor.getBoundingClientRect();
     pop.style.visibility = "hidden";
     pop.style.left = "0px";
@@ -850,6 +963,75 @@
     pop.style.visibility = "visible";
   }
 
+  /* 会话列表预览：去掉 Markdown 标记，避免出现 ## / ** 这类原文 */
+  function stripMd(text) {
+    return String(text || "")
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/`([^`]*)`/g, "$1")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, "")
+      .replace(/[*_~]{1,3}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /* 来源按文档聚合：[1][2] note.md，不再每条重复知识库与文档名 */
+  function groupSources(sources) {
+    const groups = new Map();
+    (sources || []).forEach((s) => {
+      const key = `${s.kb_name}||${s.doc_name}`;
+      if (!groups.has(key)) groups.set(key, { kb_name: s.kb_name, doc_name: s.doc_name, items: [] });
+      groups.get(key).items.push(s);
+    });
+    return Array.from(groups.values());
+  }
+  function renderSourceGroups(sources) {
+    const groups = groupSources(sources);
+    if (!groups.length) return "";
+    return `<div class="chat-sources">${groups.map((g) => `
+      <span class="source-group" title="${esc(g.kb_name)} / ${esc(g.doc_name)}">
+        ${g.items.map((s) => `<button type="button" class="source-chip" data-source-index="${Number(s.index) || 0}"
+          title="${esc(g.kb_name)} / ${esc(g.doc_name)} · 块 ${Number(s.chunk_index) || 0}">${Number(s.index) || 0}</button>`).join("")}
+        <span class="source-doc">${esc(g.doc_name)}</span>
+      </span>`).join("")}</div>`;
+  }
+
+  /* 把正文里的 [1] 变成可点的角标：点一下定位到对应来源 */
+  function decorateCitations(root) {
+    if (!root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!/\[\d{1,2}\]/.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+        const parent = node.parentElement;
+        if (!parent || parent.closest("code, pre, a")) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes = [];
+    let node = walker.nextNode();
+    while (node) { nodes.push(node); node = walker.nextNode(); }
+    nodes.forEach((textNode) => {
+      const frag = document.createDocumentFragment();
+      const re = /\[(\d{1,2})\]/g;
+      let last = 0;
+      let match = re.exec(textNode.nodeValue);
+      while (match) {
+        if (match.index > last) frag.appendChild(document.createTextNode(textNode.nodeValue.slice(last, match.index)));
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cite";
+        btn.dataset.cite = match[1];
+        btn.textContent = match[1];
+        btn.title = `查看来源 ${match[1]}`;
+        frag.appendChild(btn);
+        last = match.index + match[0].length;
+        match = re.exec(textNode.nodeValue);
+      }
+      if (last < textNode.nodeValue.length) frag.appendChild(document.createTextNode(textNode.nodeValue.slice(last)));
+      textNode.parentNode.replaceChild(frag, textNode);
+    });
+  }
+
   function renderChat() {
     const el = $("chatMessages");
     const messages = activeSession() ? activeSession().messages || [] : [];
@@ -859,39 +1041,61 @@
         <div class="chat-welcome">
           <span class="chat-welcome-icon">${ico("sparkle")}</span>
           <strong>基于知识库内容回答</strong>
-          <p>回答只会引用所选知识库中的资料，悬停引用标记可查看原文；资料不足时会明确告知。</p>
+          <p>回答只会引用所选知识库中的资料，点引用角标可查看原文；资料不足时会明确告知。</p>
         </div>`;
       return;
     }
     el.innerHTML = messages.map((m) => `
-      <div class="chat-msg ${esc(m.role)}${m.error ? " error" : ""}">
+      <div class="chat-msg ${esc(m.role)}${m.error ? " error" : ""}${m.pending ? " pending" : ""}">
         <span class="chat-avatar">${ico(m.role === "user" ? "user" : m.error ? "alert" : "bot")}</span>
         <div class="chat-bubble-main">
-          <div class="chat-bubble"></div>
-          ${m.sources && m.sources.length ? `<div class="chat-sources">${m.sources.map((s) => `<button type="button" class="source-chip" data-source-index="${Number(s.index) || 0}">[${Number(s.index) || 0}] ${esc(s.kb_name)} / ${esc(s.doc_name)}</button>`).join("")}</div>` : ""}
+          <div class="chat-bubble md"></div>
+          ${renderSourceGroups(m.sources)}
           ${m.provider ? `<div class="chat-meta">模型：${esc(m.provider)}${m.usage && m.usage.total_tokens ? ` · ${m.usage.total_tokens} tokens` : ""}</div>` : ""}
+          ${m.role === "assistant" && !m.pending && !m.error && m.content
+            ? `<div class="msg-actions"><button class="icon-btn" data-copy-msg title="复制回答" aria-label="复制回答">${ico("copy", "icon icon-sm")}</button></div>`
+            : ""}
         </div>
       </div>`).join("");
     el.querySelectorAll(".chat-msg").forEach((msgEl, i) => {
+      const message = messages[i];
       const bubble = msgEl.querySelector(".chat-bubble");
       if (bubble) {
-        const message = messages[i];
-        if (message.role === "assistant" && !message.error && message.content) {
+        if (message.pending) {
+          bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span><span class="sr-only">正在生成回答</span>';
+        } else if (message.role === "assistant" && !message.error && message.content) {
           bubble.innerHTML = window.renderMarkdown
             ? window.renderMarkdown(message.content)
             : esc(message.content);
+          decorateCitations(bubble);
         } else {
           bubble.textContent = message.content || "";
         }
       }
       msgEl.querySelectorAll(".source-chip").forEach((chip) => {
-        const source = (messages[i].sources || []).find((s) => String(s.index) === chip.dataset.sourceIndex);
+        const source = (message.sources || []).find((s) => String(s.index) === chip.dataset.sourceIndex);
         chip.onmouseenter = () => showSourcePopover(chip, source);
         chip.onmouseleave = () => hideSourcePopover(120);
         chip.onfocus = () => showSourcePopover(chip, source);
         chip.onblur = () => hideSourcePopover(120);
         chip.onclick = (e) => { e.stopPropagation(); showSourcePopover(chip, source); };
       });
+      msgEl.querySelectorAll(".cite").forEach((cite) => {
+        cite.onclick = (e) => {
+          e.stopPropagation();
+          const chip = msgEl.querySelector(`.source-chip[data-source-index="${cite.dataset.cite}"]`);
+          if (!chip) return;
+          msgEl.querySelectorAll(".is-target").forEach((n) => n.classList.remove("is-target"));
+          cite.classList.add("is-target");
+          chip.classList.add("is-target");
+          const source = (message.sources || []).find((s) => String(s.index) === cite.dataset.cite);
+          showSourcePopover(chip, source);
+          setTimeout(() => cite.classList.remove("is-target"), 2400);
+          setTimeout(() => chip.classList.remove("is-target"), 2400);
+        };
+      });
+      const copyBtn = msgEl.querySelector("[data-copy-msg]");
+      if (copyBtn) copyBtn.onclick = () => copyText(message.content);
     });
     el.scrollTop = el.scrollHeight;
   }
@@ -900,7 +1104,7 @@
     const text = $("chatInput").value.trim();
     if (!text) { toast("请输入问题", "error"); $("chatInput").focus(); return; }
     if (!state.chatScope.size) { toast("请至少选择一个知识库", "error"); return; }
-    if (!state.llm || !state.llm.active_id) { toast("请先配置并启用 LLM 模型", "error"); openLlmModal(); return; }
+    if (!state.llm || !state.llm.active_id) { toast("请先配置并启用 LLM 模型", "error"); openSettings("llm"); return; }
 
     const session = activeSession() || createChatSession();
     if (!session) return;
@@ -966,21 +1170,47 @@
 
   /* ---------- 事件绑定 ---------- */
   function bindEvents() {
-    document.querySelectorAll("[data-tab]").forEach((btn) => {
+    const tabs = Array.from(document.querySelectorAll("[data-tab]"));
+    tabs.forEach((btn, index) => {
       btn.onclick = () => switchTab(btn.dataset.tab);
+      btn.onkeydown = (e) => {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        e.preventDefault();
+        const offset = e.key === "ArrowRight" ? 1 : tabs.length - 1;
+        const next = tabs[(index + offset) % tabs.length];
+        switchTab(next.dataset.tab);
+        next.focus();
+      };
+    });
+    const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+    settingsTabs.forEach((btn, index) => {
+      btn.onkeydown = (e) => {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        e.preventDefault();
+        const offset = e.key === "ArrowRight" ? 1 : settingsTabs.length - 1;
+        const next = settingsTabs[(index + offset) % settingsTabs.length];
+        selectSettingsTab(next.dataset.settingsTab);
+        next.focus();
+      };
     });
     $("menuBtn").onclick = openSidebar;
     $("sidebarScrim").onclick = closeSidebar;
 
-    $("manageProvidersBtn").onclick = async () => {
-      closeSidebar();
-      openModal("providerModal");
-      try {
-        await Promise.all([loadPresets(), loadProviders()]);
-      } catch (err) { toast(err.message, "error"); }
-    };
-    $("manageLlmBtn").onclick = openLlmModal;
-    $("configLlmBtn").onclick = openLlmModal;
+    $("settingsBtn").onclick = () => openSettings("llm");
+    $("chatProviderHint").onclick = () => openSettings("llm");
+    document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
+      btn.onclick = () => selectSettingsTab(btn.dataset.settingsTab);
+    });
+    document.querySelectorAll("[data-reveal]").forEach((btn) => {
+      btn.onclick = () => {
+        const input = $(btn.dataset.reveal);
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        btn.innerHTML = ico(show ? "eye-off" : "eye");
+        btn.setAttribute("aria-label", show ? "隐藏 API Key" : "显示 API Key");
+      };
+    });
 
     $("llmPresetSelect").onchange = (e) => applyLlmPreset(Number(e.target.value));
     $("saveLlmBtn").onclick = async () => {
@@ -1065,6 +1295,17 @@
         if (anyModalOpen()) {
           document.querySelectorAll(".modal-layer.is-open").forEach((el) => closeModal(el.id));
         } else closeSidebar();
+        return;
+      }
+      if (e.key === "Tab") {
+        const layer = document.querySelector(".modal-layer.is-open");
+        if (!layer) return;
+        const items = focusables(layer);
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
       }
     });
 
@@ -1125,19 +1366,6 @@
     };
     $("kbName").onkeydown = (e) => {
       if (e.key === "Enter") { e.preventDefault(); $("submitKbBtn").click(); }
-    };
-    $("deleteKbBtn").onclick = async () => {
-      const kb = currentKb();
-      if (!kb) return;
-      const ok = await confirmDialog({ title: "删除整个知识库？", message: `「${kb.kb_name}」的全部文档与向量索引都会被删除，此操作不可撤销。`, okText: "删除知识库" });
-      if (!ok) return;
-      try {
-        await api.deleteKb(kb.kb_id);
-        state.currentKbId = null;
-        saveSelection();
-        toast("知识库已删除", "success");
-        await loadKbs();
-      } catch (err) { toast(err.message, "error"); }
     };
 
     $("refreshDocsBtn").onclick = () => loadDocs().catch((err) => toast(err.message, "error"));
@@ -1220,6 +1448,7 @@
   async function init() {
     bindEvents();
     await loadHealth();
+    setInterval(loadHealth, 30000);
     try {
       await loadProviders();
       await loadKbs();
