@@ -1,0 +1,51 @@
+/* Flat design tokens — 来源：awesome-design-skills / flat
+   规则：只用二维元素，不用阴影、渐变、纹理。 */
+
+:root {
+  /* 品牌与语义色 */
+  --primary: #F2673C;
+  --primary-strong: #D9532A;
+  --primary-weak: #FFF1EB;
+  --secondary: #8B5CF6;
+  --secondary-weak: #F3EEFF;
+  --success: #16A34A;
+  --success-weak: #EAF7EF;
+  --warning: #D97706;
+  --warning-weak: #FFF6E6;
+  --danger: #DC2626;
+  --danger-weak: #FEF0F0;
+
+  /* 中性色 */
+  --surface: #FFFFFF;
+  --canvas: #F7F8FA;
+  --canvas-strong: #F0F2F5;
+  --text: #111827;
+  --muted: #6B7280;
+  --subtle: #9CA3AF;
+  --border: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  /* 字号 12 / 14 / 16 / 20 / 24 / 32 */
+  --fs-12: 12px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-20: 20px;
+  --fs-24: 24px;
+  --fs-32: 32px;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* 间距 4 / 8 / 12 / 16 / 24 / 32 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  --sidebar-w: 268px;
+}
