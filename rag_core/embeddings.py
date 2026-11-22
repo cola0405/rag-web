@@ -1,6 +1,6 @@
 """Embedding / Rerank 接口与两个可直接使用的实现。
 
-从 AstrBot 的 provider 体系里剥离出最小契约：
+定义一套最小 Embedding / Rerank 契约：
 - get_embedding / get_embeddings / get_dim / get_embeddings_batch
 
 默认 `local-hash` 是纯本地确定性哈希向量，零配置即可跑通全流程；
@@ -24,7 +24,7 @@ logger = logging.getLogger("rag")
 
 
 class EmbeddingProvider:
-    """向量化 provider 的最小契约（与 AstrBot 同名方法兼容）。"""
+    """向量化 provider 的最小契约。"""
 
     def __init__(self, provider_id: str = "embedding") -> None:
         self.provider_id = provider_id
@@ -46,7 +46,7 @@ class EmbeddingProvider:
         max_retries: int = 3,
         progress_callback=None,
     ) -> list[list[float]]:
-        """分批 + 有限并发 + 指数退避，逻辑与 AstrBot 原实现一致。"""
+        """分批 + 有限并发 + 指数退避。"""
         semaphore = asyncio.Semaphore(tasks_limit)
         batch_results: dict[int, list[list[float]]] = {}
         completed = 0

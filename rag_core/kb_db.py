@@ -20,7 +20,7 @@ class KBSQLiteDatabase:
         """初始化知识库数据库
 
         Args:
-            db_path: 数据库文件路径, 默认位于 AstrBot 数据目录下的 knowledge_base/kb.db
+            db_path: 数据库文件路径，默认位于数据目录下的 data/kb.db
 
         """
         if db_path is None:

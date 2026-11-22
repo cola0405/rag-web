@@ -1,20 +1,21 @@
-# AstrBot RAG 知识库（独立 Web 版）
+# RAG Web 知识库
 
-把 AstrBot 4.29.4 的 RAG 知识库核心从插件/框架里抽离出来，套一层 FastAPI + 单页前端。
-**零 API key 即可跑通**：默认 `local-hash` embedding 是纯本地确定性向量，
-检索链路与原项目一致（FAISS 稠密 + SQLite FTS5/BM25 稀疏 + 加权融合 + RRF 同分排序）。
+一个独立的 RAG Web 应用：FastAPI 后端 + 单页前端，核心是 SQLite 元数据、FAISS 稠密向量、
+FTS5/BM25 稀疏检索与加权融合。
+**零 API key 即可跑通**：默认 `local-hash` embedding 是纯本地确定性向量；
+也可以换成云端语义模型（见下文）。
 
 ## 目录结构
 
 ```
 rag_core/
-  models.py                  三张元数据表（KnowledgeBase / KBDocument / KBMedia），原样抽离
-  kb_db.py                   元数据 SQLite CRUD，去掉 AstrBot 日志与路径依赖
-  vec_db/faiss_impl/         FAISS 索引、chunk 文本表、FTS5 索引（原样抽离，仅换 import）
-  chunking/                  递归字符分块 + Markdown 标题分块（原样抽离）
-  retrieval/                 稀疏检索、分数融合、检索总控（原样抽离）
+  models.py                  三张元数据表（KnowledgeBase / KBDocument / KBMedia）
+  kb_db.py                   元数据 SQLite CRUD
+  vec_db/faiss_impl/         FAISS 索引、chunk 文本表、FTS5 索引
+  chunking/                  递归字符分块 + Markdown 标题分块
+  retrieval/                 稀疏检索、分数融合、检索总控
   embeddings.py              EmbeddingProvider 契约 + local-hash / OpenAI 兼容两种实现
-  service.py                 替代 KBHelper + KnowledgeBaseManager 的轻量业务层
+  service.py                 知识库与文档生命周期的轻量业务层
 web/
   app.py                     FastAPI 接口
   static/index.html          单页界面（知识库 / 文档 / 检索）
@@ -24,17 +25,13 @@ data/                        运行时生成：kb.db、<kb_id>/{doc.db,index.fai
 ## 启动
 
 ```bash
-cd D:/project/github/astrbot-rag-web
+cd <项目目录>
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 .venv/Scripts/python.exe -m uvicorn web.app:app --host 127.0.0.1 --port 8000
 ```
 
-打开 http://127.0.0.1:8000 。本机也可直接借用 AstrBot 已装好依赖的环境：
-
-```bash
-D:/project/github/AstrBot/.venv/Scripts/python.exe -m uvicorn web.app:app --port 8000
-```
+打开 http://127.0.0.1:8000 。
 
 ## 使用
 
@@ -100,6 +97,7 @@ python scripts/mock_embedding_server.py --port 8100
 ## 许可证
 
 本项目采用 **GNU Affero General Public License v3.0（AGPL-3.0）**，详见 [LICENSE](LICENSE)。
-理由：本项目抽离自 AstrBot 的 RAG 实现，而 AstrBot 本身使用 AGPL-3.0；同时本项目是用于网络服务的 Web 应用，AGPL 的第 13 条正好覆盖通过网络提供服务时的源码获取义务。
+理由：本项目包含源自其他 AGPL-3.0 开源项目的代码，因此整体沿用 AGPL-3.0；
+同时本项目是用于网络服务的 Web 应用，AGPL 第 13 条正好覆盖通过网络提供服务时的源码获取义务。
 
-本项目包含的 AstrBot 衍生代码版权归原作者所有；其余新增代码版权归各自作者。
+衍生部分代码的版权归原作者所有；其余新增代码版权归各自作者。

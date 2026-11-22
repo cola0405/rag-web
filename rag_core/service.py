@@ -1,7 +1,7 @@
-"""知识库业务服务：替代 AstrBot 的 KBHelper + KnowledgeBaseManager 胶水层。
+"""知识库业务服务：封装知识库与文档的完整生命周期。
 
-保留 AstrBot 原生的三表元数据、FAISS 向量库、FTS5/BM25 稀疏检索和
-稠密/稀疏加权融合；去掉插件系统、provider manager、鉴权等框架依赖。
+三表元数据、FAISS 向量库、FTS5/BM25 稀疏检索和
+稠密/稀疏加权融合构成检索核心；不依赖插件系统或框架级 provider 管理。
 """
 
 from __future__ import annotations

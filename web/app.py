@@ -1,4 +1,4 @@
-"""AstrBot RAG 抽离版 —— 简单 Web 应用入口。
+"""RAG Web 应用入口。
 
 启动（项目根目录）：
     uvicorn web.app:app --reload --port 8000
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     await service.close()
 
 
-app = FastAPI(title="AstrBot RAG Knowledge Base", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="RAG Web Knowledge Base", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "web" / "static"), name="static")
 
 

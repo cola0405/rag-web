@@ -1,4 +1,4 @@
-"""独立的异常类型（替代 AstrBot 的 AstrBotError 体系）。"""
+"""独立的异常类型（不依赖任何框架的异常体系）。"""
 
 
 class KnowledgeBaseUploadError(Exception):
