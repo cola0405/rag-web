@@ -874,7 +874,16 @@
       </div>`).join("");
     el.querySelectorAll(".chat-msg").forEach((msgEl, i) => {
       const bubble = msgEl.querySelector(".chat-bubble");
-      if (bubble) bubble.textContent = messages[i].content || "";
+      if (bubble) {
+        const message = messages[i];
+        if (message.role === "assistant" && !message.error && message.content) {
+          bubble.innerHTML = window.renderMarkdown
+            ? window.renderMarkdown(message.content)
+            : esc(message.content);
+        } else {
+          bubble.textContent = message.content || "";
+        }
+      }
       msgEl.querySelectorAll(".source-chip").forEach((chip) => {
         const source = (messages[i].sources || []).find((s) => String(s.index) === chip.dataset.sourceIndex);
         chip.onmouseenter = () => showSourcePopover(chip, source);
