@@ -389,6 +389,69 @@ kbd {
 .toast.is-error .icon { color: var(--danger); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
+/* ========== 知识库对话 ========== */
+.chat-panel { display: flex; flex-direction: column; min-height: 560px; }
+.chat-panel .panel-head .panel-hint { margin-left: auto; }
+.chat-panel .panel-head .btn { margin-left: 0; }
+.chat-scope { margin-bottom: var(--sp-3); }
+.chat-messages {
+  flex: 1; min-height: 300px; max-height: 560px; overflow-y: auto;
+  padding: var(--sp-4); background: var(--canvas);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.chat-welcome {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; min-height: 240px; text-align: center; color: var(--muted);
+}
+.chat-welcome-icon {
+  width: 40px; height: 40px; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--secondary); margin-bottom: var(--sp-3);
+}
+.chat-welcome strong { color: var(--text); font-size: var(--fs-16); }
+.chat-welcome p { margin-top: var(--sp-2); font-size: var(--fs-12); line-height: 1.7; max-width: 420px; }
+.chat-msg { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.chat-msg.user { flex-direction: row-reverse; }
+.chat-avatar {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  border-radius: var(--radius-sm); background: var(--secondary-weak); color: var(--secondary);
+}
+.chat-avatar .icon { width: 15px; height: 15px; }
+.chat-msg.user .chat-avatar { background: var(--primary-weak); color: var(--primary); }
+.chat-bubble-main { max-width: 78%; min-width: 0; }
+.chat-msg.user .chat-bubble-main { display: flex; flex-direction: column; align-items: flex-end; }
+.chat-bubble {
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); white-space: pre-wrap; word-break: break-word;
+  line-height: 1.7; font-size: var(--fs-14);
+}
+.chat-msg.user .chat-bubble { background: var(--primary-weak); border-color: #FBD3C3; }
+.chat-msg.error .chat-bubble { background: var(--danger-weak); border-color: #F3C9C9; }
+.chat-sources { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
+.source-chip {
+  font-family: var(--font-mono); font-size: 11px; color: var(--secondary);
+  background: var(--secondary-weak); border-radius: var(--radius-sm); padding: 2px 6px;
+}
+.chat-meta { margin-top: var(--sp-1); font-size: 11px; color: var(--subtle); }
+.composer { display: flex; align-items: flex-end; gap: var(--sp-2); margin-top: var(--sp-3); }
+.composer textarea { flex: 1; min-height: 56px; max-height: 180px; }
+.composer .btn { min-height: 56px; padding: 0 var(--sp-4); }
+.composer-hint { margin-top: var(--sp-2); font-size: var(--fs-12); color: var(--subtle); }
+
+/* ========== LLM 配置 ========== */
+.checkbox-line {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px; font-size: var(--fs-12); color: var(--muted);
+}
+.checkbox-line input { accent-color: var(--primary); }
+.llm-actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
+.active-badge {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  color: var(--success); background: var(--success-weak);
+  border-radius: var(--radius-sm); padding: 1px 6px; margin-left: 4px;
+}
+#llmAdvanced .advanced-grid > .form-grid { padding: 0; margin-bottom: var(--sp-3); }
+
 /* ========== 响应式 ========== */
 @media (max-width: 1080px) {
   .workspace { padding: var(--sp-6) var(--sp-4); }
@@ -424,4 +487,11 @@ kbd {
   .doc-size, .doc-date { display: none; }
   .toast-stack { left: var(--sp-3); right: var(--sp-3); }
   .toast { max-width: none; }
+  .chat-panel { min-height: 480px; }
+  .chat-panel .panel-head { flex-wrap: wrap; }
+  .chat-panel .panel-head .panel-hint { margin-left: 0; width: 100%; order: 3; }
+  .chat-bubble-main { max-width: 88%; }
+  .composer { flex-direction: column; align-items: stretch; }
+  .composer .btn { min-height: 36px; width: 100%; }
+  .llm-actions { flex-wrap: wrap; justify-content: flex-end; }
 }

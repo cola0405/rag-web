@@ -397,3 +397,33 @@ class KBService:
                 }
             )
         return {"context_text": "\n".join(lines), "results": results_dict}
+
+    async def prepare_chat_context(self, question: str, kb_names: list[str]) -> dict:
+        """为对话构造带编号的知识库片段，返回可直接注入 system prompt 的上下文。"""
+        data = await self.retrieve(question, kb_names)
+        results = data.get("results") or []
+        sources: list[dict] = []
+        blocks: list[str] = []
+        for index, result in enumerate(results, 1):
+            score = result.get("score")
+            score_text = f"{float(score):.2f}" if isinstance(score, (int, float)) else "—"
+            source = {
+                "index": index,
+                "kb_id": result.get("kb_id"),
+                "kb_name": result.get("kb_name"),
+                "doc_id": result.get("doc_id"),
+                "doc_name": result.get("doc_name"),
+                "chunk_index": result.get("chunk_index", 0),
+                "score": score,
+            }
+            sources.append(source)
+            blocks.append(
+                f"【{index}】知识库：{source['kb_name']}；文档：{source['doc_name']}；"
+                f"分块：{source['chunk_index']}；相关度：{score_text}\n"
+                f"内容：{result.get('content', '')}"
+            )
+        return {
+            "sources": sources,
+            "context": "\n\n".join(blocks),
+            "has_context": bool(blocks),
+        }
