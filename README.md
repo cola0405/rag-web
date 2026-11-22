@@ -5,9 +5,9 @@ FTS5/BM25 稀疏检索与加权融合。
 **零 API key 即可跑通**：默认 `local-hash` embedding 是纯本地确定性向量；
 也可以换成云端语义模型（见下文）。
 
-![RAG Web 应用界面](docs/app-screenshot-v2.png)
+![RAG Web 应用界面](docs/app-screenshot-v3.png)
 
-*界面分为三栏：左侧知识库管理，中间文档上传，右侧混合检索与 Prompt 上下文。*
+*界面采用「侧边栏知识库 + 文档管理 / 语义检索双视图」布局，Flat 设计风格。*
 
 ## 目录结构
 
@@ -22,7 +22,11 @@ rag_core/
   service.py                 知识库与文档生命周期的轻量业务层
 web/
   app.py                     FastAPI 接口
-  static/index.html          单页界面（知识库 / 文档 / 检索）
+  static/index.html          单页骨架
+  static/css/tokens.css      Flat 设计 token（颜色 / 字号 / 间距）
+  static/css/app.css         布局与组件样式
+  static/js/api.js           后端接口封装
+  static/js/app.js           状态管理与交互
 data/                        运行时生成：kb.db、<kb_id>/{doc.db,index.faiss,files/}
 ```
 

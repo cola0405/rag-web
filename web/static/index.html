@@ -3,565 +3,312 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>RAG Web 知识库</title>
-<style>
-  :root {
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --border: #e3e6eb;
-    --text: #1f2329;
-    --muted: #6b7280;
-    --primary: #2f6fed;
-    --primary-soft: #eaf1ff;
-    --danger: #d64545;
-    --radius: 10px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
-  }
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  header h1 { font-size: 18px; margin: 0; font-weight: 650; }
-  header .tag {
-    background: var(--primary-soft); color: var(--primary);
-    padding: 3px 9px; border-radius: 20px; font-size: 12px;
-  }
-  header .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
-  main {
-    display: grid;
-    grid-template-columns: 280px minmax(320px, 1fr) minmax(340px, 1.1fr);
-    gap: 16px;
-    padding: 16px 24px 32px;
-    align-items: start;
-  }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-  }
-  .card + .card { margin-top: 16px; }
-  h2 { font-size: 14px; margin: 0 0 12px; font-weight: 650; }
-  .list { display: flex; flex-direction: column; gap: 6px; }
-  .item {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    cursor: pointer;
-    transition: background .15s, border-color .15s;
-  }
-  .item:hover { background: #f8faff; }
-  .item.active { border-color: var(--primary); background: var(--primary-soft); }
-  .item .row { display: flex; align-items: center; gap: 8px; }
-  .item .name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item .meta { color: var(--muted); font-size: 12px; margin-top: 5px; }
-  .empty { color: var(--muted); padding: 16px 4px; text-align: center; font-size: 13px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
-  input[type=text], textarea, select {
-    width: 100%; border: 1px solid var(--border); border-radius: 7px;
-    padding: 8px 10px; font: inherit; color: var(--text); background: #fff;
-    outline: none;
-  }
-  input[type=text]:focus, textarea:focus, select:focus { border-color: var(--primary); }
-  textarea { resize: vertical; min-height: 74px; line-height: 1.6; }
-  .field + .field { margin-top: 10px; }
-  button {
-    font: inherit; cursor: pointer; border-radius: 7px; padding: 8px 13px;
-    border: 1px solid var(--border); background: #fff; color: var(--text);
-  }
-  button:hover { border-color: #b9c2d0; }
-  button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-  button.primary:hover { opacity: .9; }
-  button.mini { padding: 3px 8px; font-size: 12px; color: var(--muted); }
-  button.mini:hover { color: var(--danger); border-color: #f0c2c2; }
-  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
-  .btn-row button { flex: 1; }
-  .drop {
-    border: 1px dashed #c8d1e0; border-radius: 8px; padding: 18px;
-    text-align: center; color: var(--muted); cursor: pointer; background: #fbfcfe;
-  }
-  .drop:hover { border-color: var(--primary); color: var(--primary); }
-  .doc { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0f1f3; }
-  .doc:last-child { border-bottom: 0; }
-  .doc .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .doc .doc-meta { color: var(--muted); font-size: 12px; }
-  .score {
-    display: inline-block; background: var(--primary-soft); color: var(--primary);
-    border-radius: 5px; padding: 1px 6px; font-size: 12px;
-  }
-  .result { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; }
-  .result .head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 7px; }
-  .result .content { white-space: pre-wrap; line-height: 1.7; font-size: 13px; max-height: 240px; overflow: auto; }
-  pre.context {
-    white-space: pre-wrap; word-break: break-word; background: #f8f9fb;
-    border: 1px solid var(--border); border-radius: 8px; padding: 12px;
-    max-height: 260px; overflow: auto; line-height: 1.6; font-size: 12px;
-  }
-  .toast {
-    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
-    background: #1f2329; color: #fff; padding: 9px 16px; border-radius: 8px;
-    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10;
-    max-width: 70vw;
-  }
-  .toast.show { opacity: 1; }
-  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .toolbar h2 { margin: 0; flex: 1; }
-  .note { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 6px; }
-  .overlay {
-    position: fixed; inset: 0; background: rgba(16, 24, 40, .45);
-    display: none; align-items: center; justify-content: center; z-index: 20;
-  }
-  .overlay.show { display: flex; }
-  .modal {
-    background: var(--surface); border-radius: 12px; width: min(680px, 94vw);
-    max-height: 88vh; overflow: auto; box-shadow: 0 18px 60px rgba(16, 24, 40, .22);
-  }
-  .modal-head {
-    display: flex; align-items: center; padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-  }
-  .modal-head h2 { margin: 0; flex: 1; font-size: 16px; }
-  .modal-body { padding: 18px 20px 24px; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
-  .provider-row {
-    display: flex; align-items: center; gap: 8px; padding: 9px 0;
-    border-bottom: 1px solid #f0f1f3; font-size: 13px;
-  }
-  .provider-row .pname { flex: 1; font-weight: 600; }
-  .provider-row .pmeta { color: var(--muted); font-size: 12px; }
-  code { background: #f2f4f7; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 720px) { main { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } }
-</style>
+<title>RAG Web · 知识库工作台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/css/tokens.css" />
+<link rel="stylesheet" href="/static/css/app.css" />
 </head>
 <body>
-<header>
-  <h1>RAG Web 知识库</h1>
-  <span class="tag">FAISS + FTS5/BM25 混合检索</span>
-  <button id="manageProvidersBtn" style="margin-left:8px">Embedding 模型管理</button>
-  <span class="hint" id="providerHint">加载中…</span>
-</header>
 
-<main>
-  <!-- 知识库 -->
-  <section>
-    <div class="card">
-      <h2>知识库列表</h2>
-      <div class="list" id="kbList"><div class="empty">加载中…</div></div>
-    </div>
-    <div class="card">
-      <h2>新建知识库</h2>
-      <div class="field">
-        <label for="kbName">名称</label>
-        <input id="kbName" type="text" placeholder="例如：产品手册" />
-      </div>
-      <div class="field">
-        <label for="kbDesc">描述（可选）</label>
-        <input id="kbDesc" type="text" placeholder="这个知识库装什么内容" />
-      </div>
-      <div class="field">
-        <label for="kbProvider">Embedding 模型</label>
-        <select id="kbProvider"></select>
-      </div>
-      <div class="btn-row">
-        <button class="primary" id="createKbBtn">创建</button>
-        <button id="deleteKbBtn">删除当前库</button>
-      </div>
-    </div>
-  </section>
+<!-- 图标精灵：全部 1.5px 线性，二维无投影 -->
+<svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/><path d="m3 17 9 5 9-5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5H6a2 2 0 0 0-2 2v9"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14m0 0-5-5m5 5-5 5"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 6.7"/><path d="M20 5v6h-6"/></symbol>
+</svg>
 
-  <!-- 文档 -->
-  <section>
-    <div class="card">
-      <div class="toolbar">
-        <h2>文档 <span id="docCount" style="color:var(--muted);font-weight:400"></span></h2>
-        <span style="color:var(--muted);font-size:12px" id="currentKb">未选择知识库</span>
+<div class="app-shell">
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="menuBtn" aria-label="打开知识库列表">
+      <svg class="icon"><use href="#i-menu" /></svg>
+    </button>
+    <div class="brand">
+      <span class="brand-mark"><svg class="icon"><use href="#i-layers" /></svg></span>
+      <span class="brand-text"><strong>RAG Web</strong><small>知识库工作台</small></span>
+    </div>
+    <div class="topbar-actions">
+      <div class="health-chip" id="healthChip" title="服务状态">
+        <span class="health-dot"></span><span id="healthText">连接中</span>
       </div>
-      <div class="drop" id="dropZone">点击选择或拖入文件（txt / md / pdf / csv / json）</div>
-      <input id="fileInput" type="file" multiple accept=".txt,.md,.markdown,.pdf,.csv,.json" hidden />
-      <div id="docList" style="margin-top:10px"><div class="empty">选择知识库后显示文档</div></div>
+      <button class="btn btn-ghost" id="manageProvidersBtn">
+        <svg class="icon"><use href="#i-sliders" /></svg><span>Embedding 模型</span>
+      </button>
     </div>
-    <div class="card">
-      <h2>Embedding 说明</h2>
-      <p style="color:var(--muted);line-height:1.7;margin:0;font-size:13px">
-        默认的 <code>local-hash</code> 是零配置的确定性哈希向量，用于验证完整链路，但不是语义向量。
-        点击顶部的「Embedding 模型管理」可添加 OpenAI / 阿里百炼 / 硅基流动 / 智谱 / NVIDIA / Ollama
-        等云端或本地兼容服务，创建知识库时直接选用。
-      </p>
-    </div>
-  </section>
+  </header>
 
-  <!-- 检索 -->
-  <section>
-    <div class="card">
-      <h2>检索</h2>
-      <div class="field">
-        <label for="query">问题 / 关键词</label>
-        <textarea id="query" placeholder="例如：怎么配置知识库的分块大小？"></textarea>
+  <div class="app-body">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="sidebar-title">
+          <span>知识库</span><span class="count-badge" id="kbCount">0</span>
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" id="createKbBtn">
+          <svg class="icon"><use href="#i-plus" /></svg>新建知识库
+        </button>
       </div>
-      <div class="field">
-        <label for="scope">知识库范围（留空 = 检索当前库）</label>
-        <input id="scope" type="text" placeholder="多个库名用逗号分隔" />
+      <div class="kb-list" id="kbList" role="listbox" aria-label="知识库列表">
+        <div class="empty-inline">加载中…</div>
       </div>
-      <div class="btn-row">
-        <button class="primary" id="searchBtn">检索</button>
+      <div class="sidebar-foot">
+        <div class="foot-label">检索引擎</div>
+        <div class="foot-value">FAISS · FTS5 / BM25</div>
+        <div class="foot-note">稠密 + 稀疏加权融合</div>
       </div>
-      <div id="results"></div>
-    </div>
-    <div class="card" id="contextCard" style="display:none">
-      <h2>拼接后的 Prompt 上下文</h2>
-      <pre class="context" id="contextText"></pre>
-    </div>
-  </section>
-</main>
+    </aside>
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-<div class="overlay" id="providerModal">
+    <!-- 工作区 -->
+    <main class="workspace">
+      <div class="page-head">
+        <div class="breadcrumb">知识库 <svg class="icon icon-xs"><use href="#i-arrow-right" /></svg> <span id="crumbName">—</span></div>
+        <div class="page-head-row">
+          <div>
+            <h1 id="pageTitle">未选择知识库</h1>
+            <p id="pageDesc">从左侧选择或新建一个知识库开始</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-danger-ghost btn-sm" id="deleteKbBtn" disabled>
+              <svg class="icon"><use href="#i-trash" /></svg>删除知识库
+            </button>
+          </div>
+        </div>
+        <div class="stats" id="stats">
+          <div class="stat"><span class="stat-label">文档</span><strong id="statDocs">0</strong></div>
+          <div class="stat"><span class="stat-label">分块</span><strong id="statChunks">0</strong></div>
+          <div class="stat"><span class="stat-label">Embedding</span><strong id="statProvider" class="mono">—</strong></div>
+        </div>
+      </div>
+
+      <nav class="tabs" role="tablist" aria-label="工作区视图">
+        <button class="tab is-active" role="tab" id="tab-docs" data-tab="docs" aria-selected="true" aria-controls="view-docs">
+          <svg class="icon"><use href="#i-file" /></svg>文档管理
+        </button>
+        <button class="tab" role="tab" id="tab-search" data-tab="search" aria-selected="false" aria-controls="view-search">
+          <svg class="icon"><use href="#i-search" /></svg>语义检索
+        </button>
+      </nav>
+
+      <!-- 文档视图 -->
+      <section class="view" id="view-docs" role="tabpanel" aria-labelledby="tab-docs">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>上传文档</h2>
+            <span class="panel-hint">支持 txt / md / pdf / csv / json</span>
+          </div>
+          <div class="dropzone" id="dropZone" tabindex="0" role="button" aria-label="选择或拖入文件">
+            <span class="drop-icon"><svg class="icon"><use href="#i-upload" /></svg></span>
+            <strong>拖拽文件到此处，或 <span class="link-text">点击选择</span></strong>
+            <span class="drop-sub" id="dropHint">先选择知识库，再上传文档</span>
+          </div>
+          <input id="fileInput" type="file" multiple accept=".txt,.md,.markdown,.pdf,.csv,.json" hidden />
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>文档列表 <span class="panel-count" id="docCount">0</span></h2>
+            <button class="icon-btn" id="refreshDocsBtn" title="刷新文档列表" aria-label="刷新文档列表">
+              <svg class="icon"><use href="#i-refresh" /></svg>
+            </button>
+          </div>
+          <div id="docList">
+            <div class="empty-state">
+              <svg class="empty-icon"><use href="#i-file" /></svg>
+              <p>还没有文档</p><span>上传文件后即可在这里管理</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 检索视图 -->
+      <section class="view" id="view-search" role="tabpanel" aria-labelledby="tab-search" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>检索问题</h2>
+            <span class="panel-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速检索</span>
+          </div>
+          <label class="field-label" for="queryInput">问题 / 关键词</label>
+          <textarea id="queryInput" class="input" rows="3" placeholder="例如：怎么配置知识库的分块大小？"></textarea>
+          <div class="scope-head">
+            <span class="field-label">检索范围</span>
+            <button class="text-btn" id="selectAllKbBtn">全选知识库</button>
+          </div>
+          <div class="scope-chips" id="scopeChips"><span class="muted">加载中…</span></div>
+          <div class="search-actions">
+            <button class="btn btn-primary" id="searchBtn">
+              <svg class="icon"><use href="#i-search" /></svg><span>开始检索</span>
+            </button>
+            <span class="actions-note">不选择范围时检索全部知识库</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>检索结果 <span class="panel-count" id="resultCount">0</span></h2>
+            <button class="text-btn" id="clearResultsBtn" hidden>清空结果</button>
+          </div>
+          <div id="results">
+            <div class="empty-state">
+              <svg class="empty-icon"><use href="#i-sparkle" /></svg>
+              <p>输入问题开始检索</p><span>结果会按相关度从高到低排列</span>
+            </div>
+          </div>
+          <details class="context-panel" id="contextPanel" hidden>
+            <summary><svg class="icon icon-sm"><use href="#i-chevron" /></svg>拼接后的 Prompt 上下文</summary>
+            <div class="context-body">
+              <button class="btn btn-ghost btn-sm" id="copyContextBtn">
+                <svg class="icon"><use href="#i-copy" /></svg>复制
+              </button>
+              <pre id="contextText"></pre>
+            </div>
+          </details>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- 新建知识库 -->
+<div class="modal-layer" id="kbModal" role="dialog" aria-modal="true" aria-labelledby="kbModalTitle" aria-hidden="true">
   <div class="modal">
     <div class="modal-head">
-      <h2>Embedding 模型管理</h2>
-      <button id="closeProviderModal">✕</button>
+      <h2 id="kbModalTitle">新建知识库</h2>
+      <button class="icon-btn" data-close="kbModal" aria-label="关闭"><svg class="icon"><use href="#i-x" /></svg></button>
     </div>
     <div class="modal-body">
-      <div class="field">
-        <label for="presetSelect">服务商预设</label>
-        <select id="presetSelect"></select>
-        <div class="note" id="presetNote"></div>
-      </div>
-      <div class="form-grid" style="margin-top:14px">
+      <div class="form-grid">
         <div class="field">
-          <label for="pId">Provider ID</label>
-          <input id="pId" type="text" placeholder="例如：dashscope" />
+          <label class="field-label" for="kbName">名称 <span class="required">*</span></label>
+          <input id="kbName" class="input" type="text" placeholder="例如：产品手册" autocomplete="off" />
+          <span class="field-error" id="kbNameError"></span>
         </div>
         <div class="field">
-          <label for="pName">显示名称</label>
-          <input id="pName" type="text" placeholder="例如：阿里百炼" />
+          <label class="field-label" for="kbProvider">Embedding 模型 <span class="required">*</span></label>
+          <select id="kbProvider" class="input"></select>
         </div>
       </div>
       <div class="field">
-        <label for="pBaseUrl">Base URL（到 /v1 为止，不要带 /embeddings）</label>
-        <input id="pBaseUrl" type="text" placeholder="https://api.siliconflow.cn/v1" />
+        <label class="field-label" for="kbDesc">描述（可选）</label>
+        <input id="kbDesc" class="input" type="text" placeholder="这个知识库装什么内容" autocomplete="off" />
       </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="field">
-          <label for="pModel">模型名称</label>
-          <input id="pModel" type="text" placeholder="BAAI/bge-m3" />
+      <details class="advanced">
+        <summary>分块参数（高级）</summary>
+        <div class="form-grid advanced-grid">
+          <div class="field">
+            <label class="field-label" for="kbChunkSize">分块大小（字符）</label>
+            <input id="kbChunkSize" class="input mono" type="number" min="64" max="8192" step="1" value="512" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="kbChunkOverlap">重叠字符数</label>
+            <input id="kbChunkOverlap" class="input mono" type="number" min="0" max="2048" step="1" value="50" />
+          </div>
         </div>
-        <div class="field">
-          <label for="pKey">API Key（本地保存，留空表示不需要）</label>
-          <input id="pKey" type="text" placeholder="sk-..." />
-        </div>
+      </details>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="kbModal">取消</button>
+        <button class="btn btn-primary" id="submitKbBtn" formnovalidate>创建知识库</button>
       </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="field">
-          <label for="pDim">向量维度（建库后不可改）</label>
-          <input id="pDim" type="text" inputmode="numeric" placeholder="1024" />
-        </div>
-        <div class="field">
-          <label for="pDimensions">dimensions 请求参数（可选）</label>
-          <input id="pDimensions" type="text" inputmode="numeric" placeholder="留空则不发送" />
-        </div>
-      </div>
-      <div class="btn-row">
-        <button id="saveProviderBtn">仅保存</button>
-        <button class="primary" id="testProviderBtn">保存并测试连接</button>
-      </div>
-      <div class="note" id="providerTest"></div>
-      <h2 style="margin-top:20px">已配置的 Provider</h2>
-      <div id="providerList"><div class="empty">加载中…</div></div>
-      <p class="note">API Key 以明文保存在 <code>data/embedding_providers.json</code>，请勿把该文件提交到公开仓库。</p>
     </div>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- Embedding 模型管理 -->
+<div class="modal-layer" id="providerModal" role="dialog" aria-modal="true" aria-labelledby="providerModalTitle" aria-hidden="true">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <h2 id="providerModalTitle">Embedding 模型管理</h2>
+      <button class="icon-btn" data-close="providerModal" aria-label="关闭"><svg class="icon"><use href="#i-x" /></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-label" for="presetSelect">服务商预设</label>
+        <select id="presetSelect" class="input"></select>
+        <p class="note" id="presetNote"></p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="pId">Provider ID <span class="required">*</span></label>
+          <input id="pId" class="input mono" type="text" placeholder="例如：dashscope" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pName">显示名称</label>
+          <input id="pName" class="input" type="text" placeholder="例如：阿里百炼" autocomplete="off" />
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="pBaseUrl">Base URL <span class="required">*</span></label>
+        <input id="pBaseUrl" class="input mono" type="text" placeholder="https://api.siliconflow.cn/v1" autocomplete="off" />
+        <p class="note">填到 /v1 为止，不要带 /embeddings</p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="pModel">模型名称 <span class="required">*</span></label>
+          <input id="pModel" class="input mono" type="text" placeholder="BAAI/bge-m3" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pKey">API Key</label>
+          <input id="pKey" class="input mono" type="text" placeholder="留空表示不需要" autocomplete="off" />
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="pDim">向量维度 <span class="required">*</span></label>
+          <input id="pDim" class="input mono" type="number" min="1" placeholder="1024" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pDimensions">dimensions 参数（可选）</label>
+          <input id="pDimensions" class="input mono" type="number" min="1" placeholder="留空则不发送" />
+        </div>
+      </div>
+      <div class="modal-foot split">
+        <div class="test-result" id="providerTest">填写配置后可测试连接</div>
+        <div class="foot-buttons">
+          <button class="btn btn-ghost" id="saveProviderBtn">仅保存</button>
+          <button class="btn btn-primary" id="testProviderBtn">保存并测试</button>
+        </div>
+      </div>
+      <div class="section-divider"></div>
+      <h3 class="section-title">已配置的 Provider <span class="panel-count" id="providerCount">0</span></h3>
+      <div id="providerList"><div class="empty-inline">加载中…</div></div>
+      <p class="note">API Key 以明文保存在 <code>data/embedding_providers.json</code>，请勿提交到公开仓库。</p>
+    </div>
+  </div>
+</div>
 
-<script>
-const $ = (id) => document.getElementById(id);
-let kbs = [];
-let currentKbId = null;
-let providers = [];
-let presets = [];
+<!-- 通用确认弹窗 -->
+<div class="modal-layer" id="confirmModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage" aria-hidden="true">
+  <div class="modal modal-confirm">
+    <div class="modal-body">
+      <div class="confirm-icon"><svg class="icon"><use href="#i-alert" /></svg></div>
+      <h2 id="confirmTitle">确认操作</h2>
+      <p id="confirmMessage"></p>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="confirmCancel">取消</button>
+        <button class="btn btn-danger" id="confirmOk">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-function toast(message, isError = false) {
-  const el = $("toast");
-  el.textContent = message;
-  el.style.background = isError ? "#b42318" : "#1f2329";
-  el.classList.add("show");
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.remove("show"), 2600);
-}
+<div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
 
-async function api(path, options = {}) {
-  const res = await fetch(path, options);
-  let data;
-  try { data = await res.json(); } catch (e) { data = {}; }
-  if (!res.ok) throw new Error(data.detail || `请求失败: ${res.status}`);
-  return data;
-}
-
-async function loadProviders() {
-  providers = await api("/api/providers");
-  const selected = $("kbProvider").value;
-  $("kbProvider").innerHTML = providers
-    .map(p => `<option value="${p.id}">${escapeHtml(p.name || p.id)} · ${p.dim} 维</option>`).join("");
-  if (providers.some(p => p.id === selected)) $("kbProvider").value = selected;
-  $("providerHint").textContent = `可用 Embedding: ${providers.map(p => p.id).join(", ")}`;
-  renderProviderList();
-}
-
-async function loadPresets() {
-  presets = await api("/api/embedding-presets");
-  $("presetSelect").innerHTML = presets
-    .map((p, i) => `<option value="${i}">${escapeHtml(p.name)}</option>`).join("");
-  applyPreset(0);
-}
-
-function applyPreset(index) {
-  const p = presets[index];
-  if (!p) return;
-  $("pId").value = p.id;
-  $("pName").value = p.name;
-  $("pBaseUrl").value = p.base_url;
-  $("pModel").value = p.model;
-  $("pDim").value = p.dim;
-  $("pDimensions").value = p.dimensions == null ? "" : p.dimensions;
-  $("presetNote").textContent = p.note || "";
-  $("providerTest").textContent = "";
-}
-
-function renderProviderList() {
-  const el = $("providerList");
-  if (!el) return;
-  el.innerHTML = providers.map(p => `
-    <div class="provider-row">
-      <span class="pname">${escapeHtml(p.name || p.id)}</span>
-      <span class="pmeta">${p.id} · ${p.dim} 维 · ${escapeHtml(p.model || "本地")}${p.has_key ? " · 已配置 Key" : ""}</span>
-      ${p.id === "local-hash" ? "" : `<button class="mini" data-remove="${p.id}">删除</button>`}
-    </div>`).join("");
-  el.querySelectorAll("button[data-remove]").forEach(btn => {
-    btn.onclick = async () => {
-      if (!confirm(`删除 provider「${btn.dataset.remove}」？已有知识库使用它时会被拒绝。`)) return;
-      try {
-        await api(`/api/providers/${btn.dataset.remove}`, { method: "DELETE" });
-        toast("已删除 provider");
-        loadProviders();
-      } catch (e) { toast(e.message, true); }
-    };
-  });
-}
-
-function providerPayload() {
-  return {
-    id: $("pId").value.trim(),
-    name: $("pName").value.trim(),
-    base_url: $("pBaseUrl").value.trim(),
-    model: $("pModel").value.trim(),
-    api_key: $("pKey").value.trim(),
-    dim: parseInt($("pDim").value, 10),
-    dimensions: $("pDimensions").value.trim() === "" ? null : parseInt($("pDimensions").value, 10),
-  };
-}
-
-async function saveProvider(payload) {
-  const saved = await api("/api/providers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  await loadProviders();
-  $("kbProvider").value = saved.id;
-  return saved;
-}
-
-$("manageProvidersBtn").onclick = () => {
-  $("providerModal").classList.add("show");
-  loadPresets();
-  loadProviders();
-};
-$("closeProviderModal").onclick = () => $("providerModal").classList.remove("show");
-$("providerModal").onclick = (e) => {
-  if (e.target === $("providerModal")) $("providerModal").classList.remove("show");
-};
-$("presetSelect").onchange = (e) => applyPreset(Number(e.target.value));
-$("saveProviderBtn").onclick = async () => {
-  try {
-    const saved = await saveProvider(providerPayload());
-    toast(`已保存 provider「${saved.id}」`);
-  } catch (e) { toast(e.message, true); }
-};
-$("testProviderBtn").onclick = async () => {
-  const payload = providerPayload();
-  $("providerTest").textContent = "正在测试连接…";
-  try {
-    const saved = await saveProvider(payload);
-    const result = await api(`/api/providers/${saved.id}/test`, { method: "POST" });
-    $("providerTest").textContent = result.match
-      ? `连接成功：返回 ${result.actual_dim} 维，与配置一致。`
-      : `连接成功但维度不一致：返回 ${result.actual_dim} 维，配置为 ${result.expected_dim} 维，请修正后重新保存。`;
-    toast(result.match ? "云端 Embedding 连接成功" : "维度不匹配", !result.match);
-  } catch (e) {
-    $("providerTest").textContent = `测试失败：${e.message}`;
-    toast(e.message, true);
-  }
-};
-
-async function loadKbs() {
-  kbs = await api("/api/kbs");
-  if (currentKbId && !kbs.some(kb => kb.kb_id === currentKbId)) currentKbId = null;
-  if (!currentKbId && kbs.length) currentKbId = kbs[0].kb_id;
-  $("kbList").innerHTML = kbs.length
-    ? kbs.map(kb => `
-        <div class="item ${kb.kb_id === currentKbId ? "active" : ""}" data-id="${kb.kb_id}">
-          <div class="row"><span>${kb.emoji || "📚"}</span><span class="name">${escapeHtml(kb.kb_name)}</span></div>
-          <div class="meta">${kb.doc_count} 文档 · ${kb.chunk_count} 分块 · ${kb.embedding_provider_id}</div>
-        </div>`).join("")
-    : '<div class="empty">还没有知识库，先在下面创建一个</div>';
-  $("kbList").querySelectorAll(".item").forEach(el => {
-    el.onclick = () => { currentKbId = el.dataset.id; loadKbs(); loadDocs(); };
-  });
-  const kb = kbs.find(k => k.kb_id === currentKbId);
-  $("currentKb").textContent = kb ? kb.kb_name : "未选择知识库";
-}
-
-async function loadDocs() {
-  if (!currentKbId) { $("docList").innerHTML = '<div class="empty">选择知识库后显示文档</div>'; return; }
-  const docs = await api(`/api/kbs/${currentKbId}/documents`);
-  $("docCount").textContent = `(${docs.length})`;
-  $("docList").innerHTML = docs.length
-    ? docs.map(doc => `
-        <div class="doc">
-          <span>📄</span>
-          <span class="doc-name" title="${escapeHtml(doc.doc_name)}">${escapeHtml(doc.doc_name)}</span>
-          <span class="doc-meta">${doc.chunk_count} 块 · ${(doc.file_size / 1024).toFixed(1)} KB</span>
-          <button class="mini" data-doc="${doc.doc_id}">删除</button>
-        </div>`).join("")
-    : '<div class="empty">还没有文档，上传一个试试</div>';
-  $("docList").querySelectorAll("button[data-doc]").forEach(btn => {
-    btn.onclick = async () => {
-      if (!confirm("删除这个文档？")) return;
-      try {
-        await api(`/api/kbs/${currentKbId}/documents/${btn.dataset.doc}`, { method: "DELETE" });
-        toast("已删除"); loadDocs(); loadKbs();
-      } catch (e) { toast(e.message, true); }
-    };
-  });
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
-
-$("createKbBtn").onclick = async () => {
-  const name = $("kbName").value.trim();
-  if (!name) return toast("请输入知识库名称", true);
-  try {
-    const kb = await api("/api/kbs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kb_name: name,
-        description: $("kbDesc").value.trim(),
-        embedding_provider_id: $("kbProvider").value,
-      }),
-    });
-    currentKbId = kb.kb_id;
-    $("kbName").value = ""; $("kbDesc").value = "";
-    toast(`已创建知识库「${kb.kb_name}」`);
-    loadKbs(); loadDocs();
-  } catch (e) { toast(e.message, true); }
-};
-
-$("deleteKbBtn").onclick = async () => {
-  if (!currentKbId) return toast("请先选择一个知识库", true);
-  if (!confirm("删除整个知识库会清掉所有文档和向量，确定吗？")) return;
-  try {
-    await api(`/api/kbs/${currentKbId}`, { method: "DELETE" });
-    currentKbId = null;
-    toast("已删除知识库");
-    loadKbs(); loadDocs();
-  } catch (e) { toast(e.message, true); }
-};
-
-$("dropZone").onclick = () => $("fileInput").click();
-$("dropZone").ondragover = (e) => { e.preventDefault(); $("dropZone").style.borderColor = "var(--primary)"; };
-$("dropZone").ondragleave = () => { $("dropZone").style.borderColor = "#c8d1e0"; };
-$("dropZone").ondrop = async (e) => {
-  e.preventDefault();
-  $("dropZone").style.borderColor = "#c8d1e0";
-  if (!currentKbId) return toast("请先创建或选择知识库", true);
-  const files = Array.from(e.dataTransfer.files);
-  for (const file of files) await uploadFile(file);
-};
-
-$("fileInput").onchange = async (e) => {
-  for (const file of Array.from(e.target.files)) await uploadFile(file);
-  e.target.value = "";
-};
-
-async function uploadFile(file) {
-  if (!currentKbId) return toast("请先创建或选择知识库", true);
-  toast(`正在上传 ${file.name} …`);
-  const form = new FormData();
-  form.append("file", file);
-  try {
-    const doc = await api(`/api/kbs/${currentKbId}/documents`, { method: "POST", body: form });
-    toast(`已入库 ${doc.doc_name}（${doc.chunk_count} 块）`);
-    loadDocs(); loadKbs();
-  } catch (e) { toast(e.message, true); }
-}
-
-$("searchBtn").onclick = async () => {
-  const query = $("query").value.trim();
-  if (!query) return toast("请输入问题", true);
-  const scope = $("scope").value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
-  const kb = kbs.find(k => k.kb_id === currentKbId);
-  if (!scope.length && kb) scope.push(kb.kb_name);
-  $("searchBtn").disabled = true;
-  $("results").innerHTML = '<div class="empty">检索中…</div>';
-  try {
-    const data = await api("/api/retrieve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, kb_names: scope }),
-    });
-    $("results").innerHTML = data.results.length
-      ? data.results.map((r, i) => `
-          <div class="result">
-            <div class="head">
-              <span>#${i + 1} ${escapeHtml(r.kb_name)} / ${escapeHtml(r.doc_name)} · 块 ${r.chunk_index}</span>
-              <span class="score">${r.score.toFixed(3)}</span>
-            </div>
-            <div class="content">${escapeHtml(r.content)}</div>
-          </div>`).join("")
-      : '<div class="empty">没有检索到相关内容</div>';
-    $("contextCard").style.display = data.results.length ? "block" : "none";
-    $("contextText").textContent = data.context_text || "";
-  } catch (e) {
-    $("results").innerHTML = "";
-    toast(e.message, true);
-  } finally {
-    $("searchBtn").disabled = false;
-  }
-};
-
-(async () => {
-  try {
-    await loadProviders();
-    await loadKbs();
-    await loadDocs();
-  } catch (e) { toast(e.message, true); }
-})();
-</script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js"></script>
 </body>
 </html>
