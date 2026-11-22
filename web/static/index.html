@@ -79,26 +79,6 @@
 
     <!-- 工作区 -->
     <main class="workspace">
-      <div class="page-head">
-        <div class="breadcrumb">知识库 <svg class="icon icon-xs"><use href="#i-arrow-right" /></svg> <span id="crumbName">—</span></div>
-        <div class="page-head-row">
-          <div>
-            <h1 id="pageTitle">未选择知识库</h1>
-            <p id="pageDesc">从左侧选择或新建一个知识库开始</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn btn-danger-ghost btn-sm" id="deleteKbBtn" disabled>
-              <svg class="icon"><use href="#i-trash" /></svg>删除知识库
-            </button>
-          </div>
-        </div>
-        <div class="stats" id="stats">
-          <div class="stat"><span class="stat-label">文档</span><strong id="statDocs">0</strong></div>
-          <div class="stat"><span class="stat-label">分块</span><strong id="statChunks">0</strong></div>
-          <div class="stat"><span class="stat-label">Embedding</span><strong id="statProvider" class="mono">—</strong></div>
-        </div>
-      </div>
-
       <nav class="tabs" role="tablist" aria-label="工作区视图">
         <button class="tab is-active" role="tab" id="tab-chat" data-tab="chat" aria-selected="true" aria-controls="view-chat">
           <svg class="icon"><use href="#i-chat" /></svg>知识库对话
@@ -194,6 +174,9 @@
             <h2>知识库对话</h2>
             <span class="panel-hint" id="chatProviderHint">未配置 LLM</span>
             <button class="text-btn" id="clearChatBtn" hidden>清空当前会话</button>
+            <button class="icon-btn danger-icon" id="deleteKbBtn" title="删除当前知识库" aria-label="删除当前知识库" disabled>
+              <svg class="icon"><use href="#i-trash" /></svg>
+            </button>
             <button class="btn btn-ghost btn-sm" id="configLlmBtn">
               <svg class="icon"><use href="#i-sliders" /></svg>LLM 配置
             </button>
