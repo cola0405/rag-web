@@ -457,6 +457,41 @@ kbd {
 }
 .chat-msg.user .chat-bubble { background: var(--primary-weak); border-color: #FBD3C3; }
 .chat-msg.error .chat-bubble { background: var(--danger-weak); border-color: #F3C9C9; }
+.chat-msg.assistant .chat-bubble { white-space: normal; }
+.chat-bubble p { margin: 0 0 var(--sp-2); }
+.chat-bubble p:last-child { margin-bottom: 0; }
+.chat-bubble h1, .chat-bubble h2, .chat-bubble h3, .chat-bubble h4 {
+  margin: var(--sp-2) 0 var(--sp-1); line-height: 1.4; font-weight: 700;
+}
+.chat-bubble h1 { font-size: var(--fs-20); }
+.chat-bubble h2 { font-size: var(--fs-16); }
+.chat-bubble h3, .chat-bubble h4 { font-size: var(--fs-14); }
+.chat-bubble ul, .chat-bubble ol { margin: var(--sp-2) 0; padding-left: 20px; }
+.chat-bubble li { margin: 2px 0; }
+.chat-bubble code {
+  font-family: var(--font-mono); font-size: var(--fs-12);
+  background: var(--canvas-strong); border-radius: 3px; padding: 1px 4px;
+}
+.chat-bubble pre {
+  margin: var(--sp-2) 0; padding: var(--sp-3);
+  background: var(--canvas); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); overflow-x: auto;
+}
+.chat-bubble pre code { background: transparent; padding: 0; white-space: pre; }
+.chat-bubble blockquote {
+  margin: var(--sp-2) 0; padding: var(--sp-1) var(--sp-3);
+  border-left: 3px solid var(--secondary); background: var(--canvas);
+  color: var(--muted);
+}
+.chat-bubble hr { border: 0; border-top: 1px solid var(--border); margin: var(--sp-3) 0; }
+.chat-bubble a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.chat-bubble del { color: var(--muted); }
+.chat-bubble .md-table-wrap { margin: var(--sp-2) 0; overflow-x: auto; }
+.chat-bubble table { width: 100%; border-collapse: collapse; font-size: var(--fs-12); }
+.chat-bubble th, .chat-bubble td {
+  border: 1px solid var(--border); padding: 6px var(--sp-2); text-align: left;
+}
+.chat-bubble th { background: var(--canvas); font-weight: 600; }
 .chat-sources { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
 .source-chip {
   font-family: var(--font-mono); font-size: 11px; color: var(--secondary);
