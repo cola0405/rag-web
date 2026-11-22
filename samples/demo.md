@@ -4,7 +4,7 @@
 
 在 Web 界面左侧填写名称，选择 Embedding 模型后点击「创建」。
 默认情况下使用本地哈希向量 local-hash，不需要填写任何 API Key。
-如果设置了 RAG_OPENAI_BASE_URL 等环境变量，可以选择 openai 获得真实语义召回能力。
+也可以在页面右上角的「Embedding 模型管理」里添加云端服务，获得真实语义召回能力。
 
 ## 上传文档
 
